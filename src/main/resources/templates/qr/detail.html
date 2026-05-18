@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title th:text="${qr.label ?: 'QR Detail'} + ' &middot; QRCODE'">QR Detail &middot; QRCODE</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" th:href="@{/css/shared.css}">
+    <style>
+        .back-link {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.4rem;
+            color: var(--text-muted);
+            text-decoration: none;
+            font-size: 0.85rem;
+            font-weight: 500;
+            margin: 2rem 0 1.25rem;
+            transition: color 0.2s;
+        }
+
+        .back-link:hover { color: #a5b4fc; }
+
+        .detail-grid {
+            display: grid;
+            grid-template-columns: auto 1fr;
+            gap: 2rem;
+            align-items: start;
+        }
+
+        @media (max-width: 680px) {
+            .detail-grid { grid-template-columns: 1fr; }
+            .qr-large-wrap { display: flex; justify-content: center; }
+        }
+
+        .qr-large {
+            width: 280px;
+            height: 280px;
+            border-radius: 16px;
+            padding: 14px;
+            background: #fff;
+            box-shadow: 0 12px 48px rgba(0, 0, 0, 0.5);
+        }
+
+        /* Metadata table */
+        .meta-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 1.5rem;
+        }
+
+        .meta-table tr {
+            border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+        }
+
+        .meta-table tr:last-child { border-bottom: none; }
+
+        .meta-table td {
+            padding: 0.7rem 0;
+            font-size: 0.875rem;
+            vertical-align: top;
+        }
+
+        .meta-table td:first-child {
+            font-size: 0.68rem;
+            font-weight: 600;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 0.07em;
+            width: 120px;
+            padding-right: 1rem;
+            white-space: nowrap;
+        }
+
+        .meta-table td:last-child {
+            color: var(--text-primary);
+            word-break: break-all;
+        }
+
+        .action-row {
+            display: flex;
+            gap: 0.75rem;
+            flex-wrap: wrap;
+        }
+
+        .action-row form { display: inline; }
+    </style>
+</head>
+<body>
+<nav th:replace="~{fragments/nav :: navbar}"></nav>
+
+<div class="container">
+    <a class="back-link" href="/qr/history">&#8592; Back to History</a>
+
+    <div class="card">
+        <div class="card-title">QR Code Detail</div>
+
+        <div class="detail-grid">
+            <!-- Large QR image -->
+            <div class="qr-large-wrap">
+                <img class="qr-large"
+                     th:src="@{/api/qr/{id}/image(id=${qr.id})}"
+                     th:alt="${qr.label ?: qr.content}">
+            </div>
+
+            <!-- Metadata + actions -->
+            <div>
+                <table class="meta-table">
+                    <tr>
+                        <td>ID</td>
+                        <td th:text="${qr.id}"></td>
+                    </tr>
+                    <tr th:if="${qr.label != null and !#strings.isEmpty(qr.label)}">
+                        <td>Label</td>
+                        <td th:text="${qr.label}"></td>
+                    </tr>
+                    <tr>
+                        <td>Content</td>
+                        <td th:text="${qr.content}"></td>
+                    </tr>
+                    <tr>
+                        <td>Size</td>
+                        <td th:text="${qr.size} + ' &times; ' + ${qr.size} + ' px'"></td>
+                    </tr>
+                    <tr>
+                        <td>Created</td>
+                        <td th:text="${#temporals.format(qr.createdAt, 'MMM d, yyyy HH:mm:ss', #locale)}"></td>
+                    </tr>
+                </table>
+
+                <div class="action-row">
+                    <a th:href="@{/qr/{id}/download(id=${qr.id})}"
+                       class="btn btn-secondary">&#8681; Download PNG</a>
+                    <form th:action="@{/qr/{id}/delete(id=${qr.id})}" method="post">
+                        <button type="submit" class="btn btn-danger"
+                                onclick="return confirm('Delete this QR code?')">
+                            &#128465; Delete
+                        </button>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+</body>
+</html>

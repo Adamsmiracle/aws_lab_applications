@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>QR History &middot; QRCODE</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" th:href="@{/css/shared.css}">
+    <style>
+        .page-header {
+            padding: 2.5rem 0 2rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 1rem;
+        }
+
+        .page-header h1 {
+            font-size: clamp(1.4rem, 3.5vw, 2rem);
+            font-weight: 700;
+            background: linear-gradient(135deg, #e0e7ff, var(--indigo) 50%, var(--purple));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        /* Responsive card grid */
+        .qr-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+            gap: 1.25rem;
+        }
+
+        .qr-card {
+            background: var(--glass-bg);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            border: 1px solid var(--glass-border);
+            border-radius: 14px;
+            overflow: hidden;
+            transition: transform 0.25s ease, border-color 0.25s ease;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .qr-card:hover {
+            transform: translateY(-4px);
+            border-color: rgba(99, 102, 241, 0.35);
+        }
+
+        .qr-thumb-wrap {
+            background: rgba(255, 255, 255, 0.03);
+            border-bottom: 1px solid var(--glass-border);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 1.25rem;
+        }
+
+        .qr-thumb {
+            width: 120px;
+            height: 120px;
+            border-radius: 8px;
+            padding: 8px;
+            background: #fff;
+            box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
+        }
+
+        .qr-card-body {
+            padding: 1rem;
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            gap: 0.4rem;
+        }
+
+        .qr-card-label {
+            font-size: 0.9rem;
+            font-weight: 600;
+            color: var(--text-primary);
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .qr-card-content {
+            font-size: 0.75rem;
+            color: var(--text-muted);
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            flex: 1;
+        }
+
+        .qr-card-meta {
+            font-size: 0.68rem;
+            color: var(--text-muted);
+            margin-top: 0.25rem;
+        }
+
+        .qr-card-actions {
+            padding: 0.75rem 1rem 1rem;
+            display: flex;
+            gap: 0.5rem;
+        }
+
+        .qr-card-actions .btn {
+            flex: 1;
+            padding: 0.45rem 0.5rem;
+            font-size: 0.78rem;
+        }
+
+        /* Empty state */
+        .empty-state {
+            text-align: center;
+            padding: 5rem 2rem;
+            color: var(--text-muted);
+        }
+
+        .empty-icon {
+            font-size: 3.5rem;
+            margin-bottom: 1rem;
+            opacity: 0.25;
+        }
+
+        .empty-state h3 {
+            font-size: 1.1rem;
+            font-weight: 600;
+            color: var(--text-secondary);
+            margin-bottom: 0.5rem;
+        }
+
+        .empty-state p {
+            font-size: 0.88rem;
+            margin-bottom: 1.5rem;
+        }
+    </style>
+</head>
+<body>
+<nav th:replace="~{fragments/nav :: navbar}"></nav>
+
+<div class="container">
+    <div class="page-header">
+        <h1>QR History</h1>
+        <a href="/qr" class="btn btn-secondary">&#43; New QR Code</a>
+    </div>
+
+    <!-- Alerts -->
+    <div class="alert alert-error"   th:if="${error}"   th:text="${error}"></div>
+    <div class="alert alert-success" th:if="${success}" th:text="${success}"></div>
+
+    <!-- Grid -->
+    <div class="qr-grid" th:if="${not #lists.isEmpty(qrCodes)}">
+        <div class="qr-card" th:each="qr : ${qrCodes}">
+
+            <div class="qr-thumb-wrap">
+                <img class="qr-thumb"
+                     th:src="@{/api/qr/{id}/image(id=${qr.id})}"
+                     th:alt="${qr.label ?: qr.content}">
+            </div>
+
+            <div class="qr-card-body">
+                <div class="qr-card-label"
+                     th:text="${qr.label != null and !#strings.isEmpty(qr.label)} ? ${qr.label} : 'Untitled'">
+                </div>
+                <div class="qr-card-content" th:text="${qr.content}"></div>
+                <div class="qr-card-meta"
+                     th:text="${#temporals.format(qr.createdAt, 'MMM d, yyyy HH:mm', #locale)}">
+                </div>
+            </div>
+
+            <div class="qr-card-actions">
+                <a th:href="@{/qr/{id}(id=${qr.id})}" class="btn btn-ghost">View</a>
+                <form th:action="@{/qr/{id}/delete(id=${qr.id})}" method="post" style="flex:1">
+                    <button type="submit" class="btn btn-danger"
+                            style="width:100%"
+                            onclick="return confirm('Delete this QR code?')">Delete</button>
+                </form>
+            </div>
+
+        </div>
+    </div>
+
+    <!-- Empty state -->
+    <div class="empty-state" th:if="${#lists.isEmpty(qrCodes)}">
+        <div class="empty-icon">&#9638;</div>
+        <h3>No QR codes yet</h3>
+        <p>Generate your first one to see it here.</p>
+        <a href="/qr" class="btn btn-secondary">&#9670; Generate QR Code</a>
+    </div>
+</div>
+</body>
+</html>

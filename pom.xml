@@ -9,10 +9,10 @@
 		<relativePath/> <!-- lookup parent from repository -->
 	</parent>
 	<groupId>com.pm</groupId>
-	<artifactId>demo</artifactId>
+	<artifactId>qrcode</artifactId>
 	<version>0.0.1-SNAPSHOT</version>
-	<name>demo</name>
-	<description>demo</description>
+	<name>qrcode</name>
+	<description>QRCODE — QR Code Generator</description>
 	<url/>
 	<licenses>
 		<license/>
@@ -28,7 +28,6 @@
 	</scm>
 	<properties>
 		<java.version>21</java.version>
-		<aws.sdk.version>2.30.38</aws.sdk.version>
 	</properties>
 	<dependencies>
 		<dependency>
@@ -38,14 +37,36 @@
 
 		<dependency>
 			<groupId>org.springframework.boot</groupId>
-			<artifactId>spring-boot-starter-webmvc-test</artifactId>
-			<scope>test</scope>
+			<artifactId>spring-boot-starter-thymeleaf</artifactId>
 		</dependency>
 
 		<dependency>
-			<groupId>software.amazon.awssdk</groupId>
-			<artifactId>dynamodb</artifactId>
-			<version>${aws.sdk.version}</version>
+			<groupId>org.springframework.boot</groupId>
+			<artifactId>spring-boot-starter-data-jpa</artifactId>
+		</dependency>
+
+		<dependency>
+			<groupId>com.h2database</groupId>
+			<artifactId>h2</artifactId>
+			<scope>runtime</scope>
+		</dependency>
+
+		<dependency>
+			<groupId>com.google.zxing</groupId>
+			<artifactId>core</artifactId>
+			<version>3.5.3</version>
+		</dependency>
+
+		<dependency>
+			<groupId>com.google.zxing</groupId>
+			<artifactId>javase</artifactId>
+			<version>3.5.3</version>
+		</dependency>
+
+		<dependency>
+			<groupId>org.springframework.boot</groupId>
+			<artifactId>spring-boot-starter-webmvc-test</artifactId>
+			<scope>test</scope>
 		</dependency>
 	</dependencies>
 

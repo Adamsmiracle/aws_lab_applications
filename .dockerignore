@@ -1,0 +1,41 @@
+# Maven build output — re-created inside the container by the build stage
+target/
+
+# Local Maven cache — never belongs in the build context
+.m2/
+
+# Version control metadata
+.git/
+.gitignore
+.gitattributes
+
+# IDE project files
+.idea/
+.vscode/
+*.iml
+
+# Documentation (not needed at runtime)
+README.md
+HELP.md
+
+# Docker files themselves — no reason to copy them into the image
+Dockerfile
+.dockerignore
+
+# CI / GitHub Actions configuration
+.github/
+
+# Environment and secrets files — must never leak into an image
+.env
+.env.*
+*.local
+
+# Pre-built JAR sitting at the project root (not the Maven-built one)
+# This is an artifact from a previous manual build and is not used by the
+# Dockerfile build stage.
+application.jar
+
+# Test and log output
+*.log
+logs/
+surefire-reports/

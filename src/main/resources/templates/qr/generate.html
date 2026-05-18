@@ -1,0 +1,206 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Generate QR &middot; QRCODE</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" th:href="@{/css/shared.css}">
+    <style>
+        .page-header {
+            padding: 2.5rem 0 2rem;
+            text-align: center;
+        }
+
+        .page-header h1 {
+            font-size: clamp(1.6rem, 4vw, 2.25rem);
+            font-weight: 700;
+            background: linear-gradient(135deg, #e0e7ff, var(--indigo) 50%, var(--purple));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            margin-bottom: 0.4rem;
+        }
+
+        .page-header p {
+            color: var(--text-secondary);
+            font-size: 0.95rem;
+        }
+
+        /* Two-column layout */
+        .gen-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 1.5rem;
+            align-items: start;
+        }
+
+        @media (max-width: 720px) {
+            .gen-grid { grid-template-columns: 1fr; }
+        }
+
+        /* QR result card */
+        .qr-result-card {
+            text-align: center;
+        }
+
+        .qr-img-wrap {
+            display: flex;
+            justify-content: center;
+            margin-bottom: 1.25rem;
+        }
+
+        .qr-img {
+            width: 220px;
+            height: 220px;
+            border-radius: 12px;
+            padding: 12px;
+            background: #fff;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+            animation: fadeInScale 0.35s ease both;
+        }
+
+        @keyframes fadeInScale {
+            from { opacity: 0; transform: scale(0.92); }
+            to   { opacity: 1; transform: scale(1); }
+        }
+
+        .qr-label {
+            font-size: 1rem;
+            font-weight: 600;
+            color: var(--text-primary);
+            margin-bottom: 0.35rem;
+        }
+
+        .qr-content-text {
+            font-size: 0.8rem;
+            color: var(--text-muted);
+            word-break: break-all;
+            margin-bottom: 1.25rem;
+            max-height: 3.5rem;
+            overflow: hidden;
+        }
+
+        .qr-action-row {
+            display: flex;
+            gap: 0.75rem;
+            justify-content: center;
+            flex-wrap: wrap;
+        }
+
+        /* Placeholder state */
+        .qr-placeholder {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 280px;
+            color: var(--text-muted);
+            gap: 0.75rem;
+        }
+
+        .placeholder-icon {
+            font-size: 3.5rem;
+            opacity: 0.25;
+        }
+
+        .placeholder-text {
+            font-size: 0.88rem;
+        }
+    </style>
+</head>
+<body>
+<nav th:replace="~{fragments/nav :: navbar}"></nav>
+
+<div class="container">
+    <div class="page-header">
+        <h1>QRCODE</h1>
+        <p>Turn any URL or text into a scannable QR code instantly.</p>
+    </div>
+
+    <!-- Alerts -->
+    <div class="alert alert-error" th:if="${error}" th:text="${error}"></div>
+
+    <div class="gen-grid">
+
+        <!-- Form card -->
+        <div class="card">
+            <div class="card-title">Configure</div>
+            <form method="post" action="/qr/generate">
+
+                <div class="form-group">
+                    <label for="content">Content <span style="color:var(--red)">*</span></label>
+                    <textarea id="content" name="content" rows="5"
+                              required maxlength="2000"
+                              placeholder="https://example.com or any text…"></textarea>
+                    <div class="form-hint"><span id="charCount">0</span> / 2000</div>
+                </div>
+
+                <div class="form-group">
+                    <label for="label">Label <span class="optional">(optional)</span></label>
+                    <input type="text" id="label" name="label"
+                           maxlength="200" placeholder="e.g. Company homepage">
+                </div>
+
+                <div class="form-group">
+                    <label for="size">Output size</label>
+                    <select id="size" name="size">
+                        <option value="200">200 &times; 200 px &mdash; Small</option>
+                        <option value="300" selected>300 &times; 300 px &mdash; Standard</option>
+                        <option value="500">500 &times; 500 px &mdash; Large</option>
+                        <option value="800">800 &times; 800 px &mdash; Print quality</option>
+                    </select>
+                </div>
+
+                <button type="submit" class="btn btn-primary">&#9670; Generate QR Code</button>
+            </form>
+        </div>
+
+        <!-- Result card -->
+        <div class="card qr-result-card" th:if="${generatedQr != null}">
+            <div class="card-title">Result</div>
+            <div class="qr-img-wrap">
+                <img class="qr-img"
+                     th:src="@{/api/qr/{id}/image(id=${generatedQr.id})}"
+                     alt="Generated QR Code">
+            </div>
+            <div class="qr-label"
+                 th:if="${generatedQr.label != null and !#strings.isEmpty(generatedQr.label)}"
+                 th:text="${generatedQr.label}"></div>
+            <div class="qr-content-text" th:text="${generatedQr.content}"></div>
+            <div class="qr-action-row">
+                <a th:href="@{/qr/{id}/download(id=${generatedQr.id})}"
+                   class="btn btn-secondary">&#8681; Download PNG</a>
+                <a th:href="@{/qr/{id}(id=${generatedQr.id})}"
+                   class="btn btn-ghost">View Details</a>
+            </div>
+        </div>
+
+        <!-- Placeholder when no QR yet -->
+        <div class="card" th:if="${generatedQr == null}">
+            <div class="qr-placeholder">
+                <div class="placeholder-icon">&#9638;</div>
+                <p class="placeholder-text">Your QR code will appear here</p>
+            </div>
+        </div>
+
+    </div>
+</div>
+
+<script>
+    (function () {
+        var ta = document.getElementById('content');
+        var counter = document.getElementById('charCount');
+        function update() {
+            var len = ta.value.length;
+            counter.textContent = len;
+            counter.style.color = len > 1800 ? '#f87171' : '';
+        }
+        ta.addEventListener('input', update);
+        update();
+    }());
+</script>
+</body>
+</html>
