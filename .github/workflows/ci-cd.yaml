@@ -70,7 +70,7 @@ jobs:
       - name: Build Docker image
         run: |
           docker build \
-            --tag "${ECR_REGISTRY}/${ECR_REPOSITORY}:${IMAGE_TAG_PRIMARY}" \
+            --tag "${ECR_REGISTRY}/${ECR_REPOSITORY}:${IMAGE_TAG}" \
             .
 
       # -----------------------------------------------------------------
@@ -80,7 +80,7 @@ jobs:
       # -----------------------------------------------------------------
       - name: Push image to Amazon ECR
         run: |
-          docker push "${ECR_REGISTRY}/${ECR_REPOSITORY}:${IMAGE_TAG_PRIMARY}"
+          docker push "${ECR_REGISTRY}/${ECR_REPOSITORY}:${IMAGE_TAG}"
 
       # -----------------------------------------------------------------
       # 6. Summarize the push in the workflow run UI for easier auditing.
@@ -93,6 +93,6 @@ jobs:
             echo ""
             echo "- Registry: \`${ECR_REGISTRY}\`"
             echo "- Repository: \`${ECR_REPOSITORY}\`"
-            echo "- Primary tag: \`${IMAGE_TAG_PRIMARY}\`"
+            echo "- Primary tag: \`${IMAGE_TAG}\`"
             echo "- SHA tag: \`${GITHUB_SHA}\`"
           } >> "$GITHUB_STEP_SUMMARY"
