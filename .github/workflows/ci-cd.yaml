@@ -27,7 +27,7 @@ env:
   AWS_ROLE_ARN: arn:aws:iam::825765391206:role/github-actions-ecr-push-role
   ECR_REGISTRY: 825765391206.dkr.ecr.eu-central-1.amazonaws.com
   ECR_REPOSITORY: adamsmiracle-springboot-app
-  IMAGE_TAG_PRIMARY: adamsmiracle_springbootapp
+  IMAGE_TAG: adamsmiracle_springbootapp
 
 jobs:
   build-and-push:
@@ -71,7 +71,6 @@ jobs:
         run: |
           docker build \
             --tag "${ECR_REGISTRY}/${ECR_REPOSITORY}:${IMAGE_TAG_PRIMARY}" \
-            --tag "${ECR_REGISTRY}/${ECR_REPOSITORY}:${GITHUB_SHA}" \
             .
 
       # -----------------------------------------------------------------
@@ -82,7 +81,6 @@ jobs:
       - name: Push image to Amazon ECR
         run: |
           docker push "${ECR_REGISTRY}/${ECR_REPOSITORY}:${IMAGE_TAG_PRIMARY}"
-          docker push "${ECR_REGISTRY}/${ECR_REPOSITORY}:${GITHUB_SHA}"
 
       # -----------------------------------------------------------------
       # 6. Summarize the push in the workflow run UI for easier auditing.
