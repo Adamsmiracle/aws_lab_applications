@@ -1,71 +1,100 @@
-name: Deploy Spring Boot to Elastic Beanstalk
+name: Build and Push Docker Image to ECR
 
+# ---------------------------------------------------------------------------
+# Trigger: every push to the repository, per lab spec.
+# ---------------------------------------------------------------------------
 on:
   push:
-    branches:
-      - main
 
+    branches:
+      - image-to-ecr
+
+# ---------------------------------------------------------------------------
+# Permissions: minimum required for OIDC + repo checkout.
+#   - id-token: write  -> allows the workflow to mint an OIDC JWT for AWS STS.
+#   - contents: read   -> allows actions/checkout to fetch the repo.
+# Anything more would violate least-privilege at the workflow level.
+# ---------------------------------------------------------------------------
 permissions:
   id-token: write
   contents: read
 
+# ---------------------------------------------------------------------------
+# Environment variables: centralized so changes happen in one place.
+# ---------------------------------------------------------------------------
 env:
-  AWS_REGION: eu-north-1
-  APPLICATION_NAME: miracle-ebs-java
-  ENVIRONMENT_NAME: Miracle-ebs-java-env
+  AWS_REGION: eu-central-1
+  AWS_ROLE_ARN: arn:aws:iam::825765391206:role/github-actions-ecr-push-role
+  ECR_REGISTRY: 825765391206.dkr.ecr.eu-central-1.amazonaws.com
+  ECR_REPOSITORY: adamsmiracle-springboot-app
+  IMAGE_TAG_PRIMARY: adamsmiracle_springbootapp
 
 jobs:
-  deploy:
+  build-and-push:
+    name: Build, Tag, and Push to Amazon ECR
     runs-on: ubuntu-latest
 
     steps:
-      # Checkout repository
-      - name: Checkout source code
+      # -----------------------------------------------------------------
+      # 1. Checkout the application source code.
+      # -----------------------------------------------------------------
+      - name: Checkout repository
         uses: actions/checkout@v4
 
-      # Setup Java
-      - name: Set up Java 21
-        uses: actions/setup-java@v4
-        with:
-          distribution: corretto
-          java-version: 21
-
-      # Build Spring Boot app
-      - name: Build with Maven
-        run: mvn clean package
-
-      # Prepare deployment bundle
-      - name: Create deployment package
-        run: |
-          mkdir deploy
-          cp target/*.jar deploy/application.jar
-          cd deploy
-          zip -r deploy.zip .
-
-      # Authenticate to AWS using OIDC
-      - name: Configure AWS Credentials
+      # -----------------------------------------------------------------
+      # 2. Assume the IAM role in AWS via OIDC.
+      #    No long-lived credentials are used. The official AWS action
+      #    handles the JWT-for-STS-credentials exchange automatically.
+      # -----------------------------------------------------------------
+      - name: Configure AWS credentials via OIDC
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          role-to-assume: ${{secrets.ROLE_TO_ASSUME}}
+          role-to-assume: ${{ env.AWS_ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
+          role-session-name: github-actions-${{ github.run_id }}
 
-      # Upload ZIP to S3
-      - name: Upload to S3
-        run: |
-          aws s3 cp deploy/deploy.zip \
-          s3://${{secrets.S3_BUCKET}}/deploy-${{github.sha}}.zip
+      # -----------------------------------------------------------------
+      # 3. Authenticate Docker to the private ECR registry.
+      #    Uses the credentials exported by the previous step.
+      # -----------------------------------------------------------------
+      - name: Login to Amazon ECR
+        id: ecr-login
+        uses: aws-actions/amazon-ecr-login@v2
 
-      # Create Elastic Beanstalk version
-      - name: Create EB Application Version
+      # -----------------------------------------------------------------
+      # 4. Build the Docker image using the Dockerfile at the repo root.
+      #    Tagged with two values:
+      #      - the lab-required tag (yourfullname_appname)
+      #      - the commit SHA, for immutable per-build references
+      # -----------------------------------------------------------------
+      - name: Build Docker image
         run: |
-          aws elasticbeanstalk create-application-version \
-            --application-name ${{ env.APPLICATION_NAME }} \
-            --version-label version-${{github.sha }} \
-            --source-bundle S3Bucket="${{ secrets.S3_BUCKET }}",S3Key="deploy-${{ github.sha }}.zip"
+          docker build \
+            --tag "${ECR_REGISTRY}/${ECR_REPOSITORY}:${IMAGE_TAG_PRIMARY}" \
+            --tag "${ECR_REGISTRY}/${ECR_REPOSITORY}:${GITHUB_SHA}" \
+            .
 
-      # Deploy new version
-      - name: Deploy to Elastic Beanstalk
+      # -----------------------------------------------------------------
+      # 5. Push both tags to ECR.
+      #    Each push uploads only the layers ECR doesn't already have,
+      #    so the second push is essentially free.
+      # -----------------------------------------------------------------
+      - name: Push image to Amazon ECR
         run: |
-          aws elasticbeanstalk update-environment \
-            --environment-name ${{ env.ENVIRONMENT_NAME }} \
-            --version-label version-${{ github.sha }}
+          docker push "${ECR_REGISTRY}/${ECR_REPOSITORY}:${IMAGE_TAG_PRIMARY}"
+          docker push "${ECR_REGISTRY}/${ECR_REPOSITORY}:${GITHUB_SHA}"
+
+      # -----------------------------------------------------------------
+      # 6. Summarize the push in the workflow run UI for easier auditing.
+      # -----------------------------------------------------------------
+      - name: Write run summary
+        if: success()
+        run: |
+          {
+            echo "### Image pushed to Amazon ECR"
+            echo ""
+            echo "- Registry: \`${ECR_REGISTRY}\`"
+            echo "- Repository: \`${ECR_REPOSITORY}\`"
+            echo "- Primary tag: \`${IMAGE_TAG_PRIMARY}\`"
+            echo "- SHA tag: \`${GITHUB_SHA}\`"
+          } >> "$GITHUB_STEP_SUMMARY"
