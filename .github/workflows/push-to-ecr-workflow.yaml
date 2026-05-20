@@ -1,0 +1,99 @@
+name: Build and Push Docker Image to ECR
+
+# ---------------------------------------------------------------------------
+# Trigger: every push to the repository, per lab spec.
+# ---------------------------------------------------------------------------
+on:
+  push:
+
+    branches:
+      - ecs-ci-cd
+
+# ---------------------------------------------------------------------------
+# Permissions: minimum required for OIDC + repo checkout.
+#   - id-token: write  -> allows the workflow to mint an OIDC JWT for AWS STS.
+#   - contents: read   -> allows actions/checkout to fetch the repo.
+# Anything more would violate least-privilege at the workflow level.
+# ---------------------------------------------------------------------------
+permissions:
+  id-token: write
+  contents: read
+
+# ---------------------------------------------------------------------------
+# Environment variables: centralized so changes happen in one place.
+# ---------------------------------------------------------------------------
+env:
+  AWS_REGION: eu-central-1
+  AWS_ROLE_ARN: arn:aws:iam::825765391206:role/github-actions-ecr-push-role
+  ECR_REGISTRY: 825765391206.dkr.ecr.eu-central-1.amazonaws.com
+  ECR_REPOSITORY: adamsmiracle-springboot-app
+
+jobs:
+  build-and-push:
+    name: Build, Tag, and Push to Amazon ECR
+    runs-on: ubuntu-latest
+
+    steps:
+      # -----------------------------------------------------------------
+      # 1. Checkout the application source code.
+      # -----------------------------------------------------------------
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # -----------------------------------------------------------------
+      # 2. Assume the IAM role in AWS via OIDC.
+      #    No long-lived credentials are used. The official AWS action
+      #    handles the JWT-for-STS-credentials exchange automatically.
+      # -----------------------------------------------------------------
+      - name: Configure AWS credentials via OIDC
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ env.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+          role-session-name: github-actions-${{ github.run_id }}
+
+      # -----------------------------------------------------------------
+      # 3. Authenticate Docker to the private ECR registry.
+      #    Uses the credentials exported by the previous step.
+      # -----------------------------------------------------------------
+      - name: Login to Amazon ECR
+        id: ecr-login
+        uses: aws-actions/amazon-ecr-login@v2
+
+      # -----------------------------------------------------------------
+      # 4. Build the Docker image using the Dockerfile at the repo root.
+      #    Tagged with two values:
+      #      - the lab-required tag (yourfullname_appname)
+      #      - the commit SHA, for immutable per-build references
+      # -----------------------------------------------------------------
+      - name: Build Docker image
+        run: |
+          docker build \
+            --tag "${ECR_REGISTRY}/${ECR_REPOSITORY}:${IMAGE_TAG}" \
+            --tag "${ECR_REGISTRY}/${ECR_REPOSITORY}:${GITHUB_SHA}" \
+            .
+
+      # -----------------------------------------------------------------
+      # 5. Push both tags to ECR.
+      #    Each push uploads only the layers ECR doesn't already have,
+      #    so the second push is essentially free.
+      # -----------------------------------------------------------------
+      - name: Push image to Amazon ECR
+        run: |
+          docker push "${ECR_REGISTRY}/${ECR_REPOSITORY}:${IMAGE_TAG}"
+          docker push "${ECR_REGISTRY}/${ECR_REPOSITORY}:${GITHUB_SHA}"
+
+      # -----------------------------------------------------------------
+      # 6. Summarize the push in the workflow run UI for easier auditing.
+      # -----------------------------------------------------------------
+      - name: Write run summary
+        if: success()
+        run: |
+          {
+            echo "### Image pushed to Amazon ECR"
+            echo ""
+            echo "- Registry: \`${ECR_REGISTRY}\`"
+            echo "- Repository: \`${ECR_REPOSITORY}\`"
+            echo "- Primary tag: \`${IMAGE_TAG}\`"
+            echo "- SHA tag: \`${GITHUB_SHA}\`"
+          } >> "$GITHUB_STEP_SUMMARY"
