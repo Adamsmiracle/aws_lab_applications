@@ -39,6 +39,7 @@ public class QrApiController {
         }
     }
 
+
     @GetMapping("/{id}/image")
     public ResponseEntity<byte[]> image(@PathVariable Long id) {
         return service.findById(id)
