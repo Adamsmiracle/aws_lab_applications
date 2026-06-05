@@ -23,10 +23,10 @@ permissions:
 # Environment variables: centralized so changes happen in one place.
 # ---------------------------------------------------------------------------
 env:
-  AWS_REGION: eu-central-1
-  AWS_ROLE_ARN: arn:aws:iam::825765391206:role/github-actions-ecr-push-role
-  ECR_REGISTRY: 825765391206.dkr.ecr.eu-central-1.amazonaws.com
-  ECR_REPOSITORY: adamsmiracle-springboot-app
+  AWS_REGION: ${{ secrets.AWS_REGION }}
+  AWS_ROLE_ARN_ECS_CI_CD: ${{ secrets.AWS_ROLE_ARN_ECS_CI_CD }}
+  ECR_REGISTRY: ${{ secrets.ECR_REGISTRY }}
+  ECR_REPOSITORY: ${{ secrets.ECR_REPOSITORY }}
 
 jobs:
   build-and-push:
@@ -48,7 +48,7 @@ jobs:
       - name: Configure AWS credentials via OIDC
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          role-to-assume: ${{ env.AWS_ROLE_ARN }}
+          role-to-assume: ${{ env.AWS_ROLE_ARN_ECS_CI_CD }}
           aws-region: ${{ env.AWS_REGION }}
           role-session-name: github-actions-${{ github.run_id }}
 
@@ -69,19 +69,15 @@ jobs:
       - name: Build Docker image
         run: |
           docker build \
-            --tag "${ECR_REGISTRY}/${ECR_REPOSITORY}:${IMAGE_TAG}" \
-            --tag "${ECR_REGISTRY}/${ECR_REPOSITORY}:${GITHUB_SHA}" \
+            --tag "${ECR_REGISTRY}/${ECR_REPOSITORY}" \
             .
 
       # -----------------------------------------------------------------
-      # 5. Push both tags to ECR.
-      #    Each push uploads only the layers ECR doesn't already have,
-      #    so the second push is essentially free.
+      # 5. Push image to ECR (no explicit tag — defaults to latest).
       # -----------------------------------------------------------------
       - name: Push image to Amazon ECR
         run: |
-          docker push "${ECR_REGISTRY}/${ECR_REPOSITORY}:${IMAGE_TAG}"
-          docker push "${ECR_REGISTRY}/${ECR_REPOSITORY}:${GITHUB_SHA}"
+          docker push "${ECR_REGISTRY}/${ECR_REPOSITORY}"
 
       # -----------------------------------------------------------------
       # 6. Summarize the push in the workflow run UI for easier auditing.
@@ -94,6 +90,4 @@ jobs:
             echo ""
             echo "- Registry: \`${ECR_REGISTRY}\`"
             echo "- Repository: \`${ECR_REPOSITORY}\`"
-            echo "- Primary tag: \`${IMAGE_TAG}\`"
-            echo "- SHA tag: \`${GITHUB_SHA}\`"
           } >> "$GITHUB_STEP_SUMMARY"
