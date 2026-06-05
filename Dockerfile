@@ -30,7 +30,7 @@ WORKDIR /app
 
 RUN addgroup -S appgroup && adduser -S appuser -G appgroup
 
-COPY --from=build /workspace/target/qrcode-0.0.1-SNAPSHOT.jar app.jar
+COPY --from=build /workspace/target/demo-0.0.1-SNAPSHOT.jar app.jar
 
 USER appuser
 EXPOSE 8080
