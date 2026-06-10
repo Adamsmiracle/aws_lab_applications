@@ -64,6 +64,7 @@ public class HelloController {
             <body>
                 <div class="card">
                     <h1>NAME: Adams Miracle test pipeline</h1>
+                    <h2>STATUS: SUCCESS</h2>
                     <h3>LAB NAME: ECS CI/CD</h3>
                 </div>
             </body>
