@@ -63,7 +63,7 @@ public class HelloController {
             </head>
             <body>
                 <div class="card">
-                    <h1>NAME: Adams Miracle</h1>
+                    <h1>NAME: Adams Miracle test pipeline</h1>
                     <h3>LAB NAME: ECS CI/CD</h3>
                 </div>
             </body>
