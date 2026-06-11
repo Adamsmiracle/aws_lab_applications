@@ -54,9 +54,8 @@ jobs:
 
       # -----------------------------------------------------------------
       # 4. Build, tag, and push.
-      #    Two tags:
-      #      - <github.sha> : immutable, unique per-build reference
-      #      - latest       : the pointer the CodePipeline ECR source tracks
+      #    Single tag:
+      #      - latest : the pointer the CodePipeline ECR source tracks
       #    Pushing `latest` is what fires the EventBridge rule that starts
       #    the pipeline. The infra (CodeBuild) generates taskdef.json and
       #    appspec.yaml at deploy time — this workflow only ships the image.
@@ -65,10 +64,8 @@ jobs:
         env:
           IMAGE: ${{ env.ECR_REGISTRY }}/${{ env.ECR_REPOSITORY }}
         run: |
-          docker build --tag "${IMAGE}:${{ github.sha }}" .
-          docker tag "${IMAGE}:${{ github.sha }}" "${IMAGE}:latest"
-          docker push "${IMAGE}:${{ github.sha }}"
-          docker push "${IMAGE}:latest"
+          docker build --tag "${IMAGE}" .
+          docker push "${IMAGE}"
 
       # -----------------------------------------------------------------
       # 5. Summarize the push in the workflow run UI for easier auditing.
@@ -81,5 +78,5 @@ jobs:
             echo ""
             echo "- Registry: \`${ECR_REGISTRY}\`"
             echo "- Repository: \`${ECR_REPOSITORY}\`"
-            echo "- Tags: \`${{ github.sha }}\`, \`latest\`"
+            echo "- Tag: \`latest\`"
           } >> "$GITHUB_STEP_SUMMARY"
