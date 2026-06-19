@@ -75,19 +75,19 @@ jobs:
       - name: Resolve AWS account ID
         run: echo "ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)" >> "$GITHUB_ENV"
 
-      # -----------------------------------------------------------------
-      # 4. Render the deploy files from their templates. Only OUR ${VARS}
-      #    are substituted; <IMAGE1_NAME> and <TASK_DEFINITION> are left
-      #    intact for CodeDeploy to fill at deploy time.
-      # -----------------------------------------------------------------
-      - name: Render deploy files from templates
-        run: |
-          set -euo pipefail
-          VARS='${PROJECT_NAME} ${ACCOUNT_ID} ${AWS_REGION} ${CONTAINER_NAME} ${CONTAINER_PORT} ${TASK_CPU} ${TASK_MEMORY}'
-          envsubst "$VARS" < taskdef.json.tpl  > taskdef.json
-          envsubst "$VARS" < appspec.yaml.tpl  > appspec.yaml
-          echo "----- taskdef.json -----"; cat taskdef.json
-          echo "----- appspec.yaml -----"; cat appspec.yaml
+      # # -----------------------------------------------------------------
+      # # 4. Render the deploy files from their templates. Only OUR ${VARS}
+      # #    are substituted; <IMAGE1_NAME> and <TASK_DEFINITION> are left
+      # #    intact for CodeDeploy to fill at deploy time.
+      # # -----------------------------------------------------------------
+      # - name: Render deploy files from templates
+      #   run: |
+      #     set -euo pipefail
+      #     VARS='${PROJECT_NAME} ${ACCOUNT_ID} ${AWS_REGION} ${CONTAINER_NAME} ${CONTAINER_PORT} ${TASK_CPU} ${TASK_MEMORY}'
+      #     envsubst "$VARS" < taskdef.json.tpl  > taskdef.json
+      #     envsubst "$VARS" < appspec.yaml.tpl  > appspec.yaml
+      #     echo "----- taskdef.json -----"; cat taskdef.json
+      #     echo "----- appspec.yaml -----"; cat appspec.yaml
 
       # -----------------------------------------------------------------
       # 5. Commit the rendered files back (only if they changed) so the
