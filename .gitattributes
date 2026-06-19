@@ -1,2 +1,9 @@
 /mvnw text eol=lf
 *.cmd text eol=crlf
+
+# Deploy files are rendered on a Linux CI runner (envsubst emits LF). Pin them
+# to LF so the committed copies match the render output and the workflow's
+# "commit if changed" step doesn't fire on every run due to line-ending drift.
+taskdef.json text eol=lf
+appspec.yaml text eol=lf
+*.tpl text eol=lf

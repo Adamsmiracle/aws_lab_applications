@@ -1,21 +1,31 @@
-name: Build and Push Docker Image to ECR
+name: Build, Render Deploy Files, and Push to ECR
 
 # ---------------------------------------------------------------------------
 # Trigger: every push to the deploy branch.
+#
+# paths-ignore: the rendered deploy files are committed back by this workflow
+# (the "Commit rendered deploy files" step below). That bot commit touches ONLY
+# taskdef.json + appspec.yaml, so ignoring them here prevents an infinite
+# build loop. Editing taskdef.json.tpl / appspec.yaml.tpl, app code, or this
+# workflow still triggers a run normally.
 # ---------------------------------------------------------------------------
 on:
   push:
     branches:
       - ecs-ci-cd
+    paths-ignore:
+      - 'taskdef.json'
+      - 'appspec.yaml'
 
 # ---------------------------------------------------------------------------
-# Permissions: minimum required for OIDC + repo checkout.
-#   - id-token: write  -> allows the workflow to mint an OIDC JWT for AWS STS.
-#   - contents: read   -> allows actions/checkout to fetch the repo.
+# Permissions:
+#   - id-token: write -> mint an OIDC JWT for AWS STS (no long-lived keys).
+#   - contents: write -> commit the rendered taskdef.json / appspec.yaml back
+#     so the pipeline's CodeStar source action can pull the current files.
 # ---------------------------------------------------------------------------
 permissions:
   id-token: write
-  contents: read
+  contents: write
 
 env:
   AWS_REGION: ${{ secrets.AWS_REGION }}
@@ -23,9 +33,22 @@ env:
   ECR_REGISTRY: ${{ secrets.ECR_REGISTRY }}
   ECR_REPOSITORY: ${{ secrets.ECR_REPOSITORY }}
 
+  # ---- Deploy-file config (single source of truth for taskdef + appspec) ----
+  # These MUST match the infra ECS stack (infra-repo children/03-alb-ecs.yaml):
+  #   role names   : <PROJECT_NAME>-task-exec-role / <PROJECT_NAME>-task-role
+  #   log group    : /ecs/<PROJECT_NAME>
+  #   task family  : <PROJECT_NAME>-task
+  #   container    : name "app", port 8080, 512 CPU / 1024 MB
+  # The account ID is resolved at runtime (sts:GetCallerIdentity) — no hardcoding.
+  PROJECT_NAME: ecs-ci-cd
+  CONTAINER_NAME: app
+  CONTAINER_PORT: "8080"
+  TASK_CPU: "512"
+  TASK_MEMORY: "1024"
+
 jobs:
   build-and-push:
-    name: Build, Tag, and Push to Amazon ECR
+    name: Render deploy files, build, and push to Amazon ECR
     runs-on: ubuntu-latest
 
     steps:
@@ -46,19 +69,55 @@ jobs:
           role-session-name: github-actions-${{ github.run_id }}
 
       # -----------------------------------------------------------------
-      # 3. Authenticate Docker to the private ECR registry.
+      # 3. Resolve the AWS account ID (needs no IAM permission — always
+      #    allowed) so the role ARNs in taskdef.json aren't hardcoded.
+      # -----------------------------------------------------------------
+      - name: Resolve AWS account ID
+        run: echo "ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)" >> "$GITHUB_ENV"
+
+      # -----------------------------------------------------------------
+      # 4. Render the deploy files from their templates. Only OUR ${VARS}
+      #    are substituted; <IMAGE1_NAME> and <TASK_DEFINITION> are left
+      #    intact for CodeDeploy to fill at deploy time.
+      # -----------------------------------------------------------------
+      - name: Render deploy files from templates
+        run: |
+          set -euo pipefail
+          VARS='${PROJECT_NAME} ${ACCOUNT_ID} ${AWS_REGION} ${CONTAINER_NAME} ${CONTAINER_PORT} ${TASK_CPU} ${TASK_MEMORY}'
+          envsubst "$VARS" < taskdef.json.tpl  > taskdef.json
+          envsubst "$VARS" < appspec.yaml.tpl  > appspec.yaml
+          echo "----- taskdef.json -----"; cat taskdef.json
+          echo "----- appspec.yaml -----"; cat appspec.yaml
+
+      # -----------------------------------------------------------------
+      # 5. Commit the rendered files back (only if they changed) so the
+      #    pipeline's CodeStar source pulls the current versions. This runs
+      #    BEFORE the image push, so the branch tip already has the rendered
+      #    files when the ECR push fires the pipeline.
+      # -----------------------------------------------------------------
+      - name: Commit rendered deploy files if changed
+        run: |
+          set -euo pipefail
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          if git diff --quiet -- taskdef.json appspec.yaml; then
+            echo "Deploy files unchanged — nothing to commit."
+          else
+            git add taskdef.json appspec.yaml
+            git commit -m "ci: render deploy files for ${GITHUB_SHA::7}"
+            git push
+          fi
+
+      # -----------------------------------------------------------------
+      # 6. Authenticate Docker to the private ECR registry.
       # -----------------------------------------------------------------
       - name: Login to Amazon ECR
         id: ecr-login
         uses: aws-actions/amazon-ecr-login@v2
 
       # -----------------------------------------------------------------
-      # 4. Build, tag, and push.
-      #    Single tag:
-      #      - latest : the pointer the CodePipeline ECR source tracks
-      #    Pushing `latest` is what fires the EventBridge rule that starts
-      #    the pipeline. The infra (CodeBuild) generates taskdef.json and
-      #    appspec.yaml at deploy time — this workflow only ships the image.
+      # 7. Build and push the image. Pushing `latest` is what fires the
+      #    EventBridge rule that starts the pipeline.
       # -----------------------------------------------------------------
       - name: Build, tag, and push image to ECR
         env:
@@ -68,7 +127,7 @@ jobs:
           docker push "${IMAGE}"
 
       # -----------------------------------------------------------------
-      # 5. Summarize the push in the workflow run UI for easier auditing.
+      # 8. Summarize the run for easier auditing.
       # -----------------------------------------------------------------
       - name: Write run summary
         if: success()
@@ -79,4 +138,5 @@ jobs:
             echo "- Registry: \`${ECR_REGISTRY}\`"
             echo "- Repository: \`${ECR_REPOSITORY}\`"
             echo "- Tag: \`latest\`"
+            echo "- Deploy files rendered from \`taskdef.json.tpl\` / \`appspec.yaml.tpl\`"
           } >> "$GITHUB_STEP_SUMMARY"

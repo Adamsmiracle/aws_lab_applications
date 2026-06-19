@@ -1,0 +1,31 @@
+{
+  "family": "ecs-ci-cd-task",
+  "networkMode": "awsvpc",
+  "requiresCompatibilities": ["FARGATE"],
+  "cpu": "512",
+  "memory": "1024",
+  "executionRoleArn": "arn:aws:iam::825765391206:role/ecs-ci-cd-task-exec-role",
+  "taskRoleArn": "arn:aws:iam::825765391206:role/ecs-ci-cd-task-role",
+  "runtimePlatform": {
+    "operatingSystemFamily": "LINUX",
+    "cpuArchitecture": "X86_64"
+  },
+  "containerDefinitions": [
+    {
+      "name": "app",
+      "image": "<IMAGE1_NAME>",
+      "essential": true,
+      "portMappings": [
+        { "containerPort": 8080, "protocol": "tcp" }
+      ],
+      "logConfiguration": {
+        "logDriver": "awslogs",
+        "options": {
+          "awslogs-group": "/ecs/ecs-ci-cd",
+          "awslogs-region": "eu-central-1",
+          "awslogs-stream-prefix": "app"
+        }
+      }
+    }
+  ]
+}
