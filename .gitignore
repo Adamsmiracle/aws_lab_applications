@@ -31,3 +31,7 @@ build/
 
 ### VS Code ###
 .vscode/
+
+# Unused prebuilt jar — image is built from source in the Dockerfile.
+# Committing it bloated the CodeDeploy SourceArtifact past the 3MB limit.
+application.jar
