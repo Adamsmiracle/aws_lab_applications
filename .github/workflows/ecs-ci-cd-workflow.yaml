@@ -1,59 +1,44 @@
-name: Build, Render Deploy Files, and Push to ECR
+name: Build app image and publish deploy bundle
 
 # ---------------------------------------------------------------------------
-# Trigger: every push to the deploy branch.
+# GitHub Actions is the "build factory" (it replaces CodeBuild). On every push
+# to the lab branch it does the two things the CodeDeploy stage needs:
+#   1. builds + pushes the container image to ECR
+#   2. publishes the CodeDeploy files (taskdef.json + appspec.yaml) to S3,
+#      but only when those files actually change (see step 4)
 #
-# paths-ignore: the rendered deploy files are committed back by this workflow
-# (the "Commit rendered deploy files" step below). That bot commit touches ONLY
-# taskdef.json + appspec.yaml, so ignoring them here prevents an infinite
-# build loop. Editing taskdef.json.tpl / appspec.yaml.tpl, app code, or this
-# workflow still triggers a run normally.
+# The pipeline itself does no building — its ECR source provides the image
+# identity (imageDetail.json, auto-generated) and its S3 source provides the
+# deploy bundle published here.
 # ---------------------------------------------------------------------------
 on:
   push:
     branches:
-      - ecs-ci-cd
-    paths-ignore:
-      - 'taskdef.json'
-      - 'appspec.yaml'
+      - photo_upload
 
-# ---------------------------------------------------------------------------
-# Permissions:
-#   - id-token: write -> mint an OIDC JWT for AWS STS (no long-lived keys).
-#   - contents: write -> commit the rendered taskdef.json / appspec.yaml back
-#     so the pipeline's CodeStar source action can pull the current files.
-# ---------------------------------------------------------------------------
+# id-token: mint an OIDC JWT for AWS STS (no long-lived keys).
+# contents: read is the default — we no longer commit anything back to the repo.
 permissions:
   id-token: write
-  contents: write
+  contents: read
 
 env:
   AWS_REGION: ${{ secrets.AWS_REGION }}
   AWS_ROLE_ARN_ECS_CI_CD: ${{ secrets.AWS_ROLE_ARN_ECS_CI_CD }}
   ECR_REGISTRY: ${{ secrets.ECR_REGISTRY }}
   ECR_REPOSITORY: ${{ secrets.ECR_REPOSITORY }}
-
-  # ---- Deploy-file config (single source of truth for taskdef + appspec) ----
-  # These MUST match the infra ECS stack (infra-repo children/03-alb-ecs.yaml):
-  #   role names   : <PROJECT_NAME>-task-exec-role / <PROJECT_NAME>-task-role
-  #   log group    : /ecs/<PROJECT_NAME>
-  #   task family  : <PROJECT_NAME>-task
-  #   container    : name "app", port 8080, 512 CPU / 1024 MB
-  # The account ID is resolved at runtime (sts:GetCallerIdentity) — no hardcoding.
-  PROJECT_NAME: ecs-ci-cd
-  CONTAINER_NAME: app
-  CONTAINER_PORT: "8080"
-  TASK_CPU: "512"
-  TASK_MEMORY: "1024"
+  # Used to derive the deploy-source bucket name (must match the infra stack):
+  #   <PROJECT_NAME>-deploy-source-<ACCOUNT_ID>-<REGION>
+  PROJECT_NAME: photo-uploader
 
 jobs:
   build-and-push:
-    name: Render deploy files, build, and push to Amazon ECR
+    name: Publish deploy bundle, build, and push to Amazon ECR
     runs-on: ubuntu-latest
 
     steps:
       # -----------------------------------------------------------------
-      # 1. Checkout the application source code.
+      # 1. Checkout the application source (incl. taskdef.json + appspec.yaml).
       # -----------------------------------------------------------------
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -69,54 +54,59 @@ jobs:
           role-session-name: github-actions-${{ github.run_id }}
 
       # -----------------------------------------------------------------
-      # 3. Resolve the AWS account ID (needs no IAM permission — always
-      #    allowed) so the role ARNs in taskdef.json aren't hardcoded.
+      # 3. Resolve the AWS account ID (no IAM permission needed) to build
+      #    the deploy-source bucket name.
       # -----------------------------------------------------------------
       - name: Resolve AWS account ID
         run: echo "ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)" >> "$GITHUB_ENV"
 
-      # # -----------------------------------------------------------------
-      # # 4. Render the deploy files from their templates. Only OUR ${VARS}
-      # #    are substituted; <IMAGE1_NAME> and <TASK_DEFINITION> are left
-      # #    intact for CodeDeploy to fill at deploy time.
-      # # -----------------------------------------------------------------
-      # - name: Render deploy files from templates
-      #   run: |
-      #     set -euo pipefail
-      #     VARS='${PROJECT_NAME} ${ACCOUNT_ID} ${AWS_REGION} ${CONTAINER_NAME} ${CONTAINER_PORT} ${TASK_CPU} ${TASK_MEMORY}'
-      #     envsubst "$VARS" < taskdef.json.tpl  > taskdef.json
-      #     envsubst "$VARS" < appspec.yaml.tpl  > appspec.yaml
-      #     echo "----- taskdef.json -----"; cat taskdef.json
-      #     echo "----- appspec.yaml -----"; cat appspec.yaml
-
       # -----------------------------------------------------------------
-      # 5. Commit the rendered files back (only if they changed) so the
-      #    pipeline's CodeStar source pulls the current versions. This runs
-      #    BEFORE the image push, so the branch tip already has the rendered
-      #    files when the ECR push fires the pipeline.
+      # 4. Publish the CodeDeploy files as a small zip to the deploy-source
+      #    S3 bucket (the pipeline's "AppSource"), but ONLY when they change.
+      #
+      #    We hash taskdef.json + appspec.yaml and store the hash as object
+      #    metadata. On each run we compare against the hash on the current
+      #    object: re-upload only if it differs (content changed) or the object
+      #    doesn't exist yet (first run). Image-only builds skip the upload, so
+      #    no needless S3 versions are created. Runs BEFORE the image push so
+      #    the bundle is current when the ECR push fires the pipeline.
+      #    <IMAGE1_NAME> / <TASK_DEFINITION> stay as placeholders — CodeDeploy
+      #    fills them at deploy time. (-j flattens the zip so both files sit at
+      #    the artifact root, where CodeDeploy expects them.)
       # -----------------------------------------------------------------
-      - name: Commit rendered deploy files if changed
+      - name: Publish deploy bundle to S3 if changed
         run: |
           set -euo pipefail
-          git config user.name  "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          if git diff --quiet -- taskdef.json appspec.yaml; then
-            echo "Deploy files unchanged — nothing to commit."
+          DEPLOY_BUCKET="${PROJECT_NAME}-deploy-source-${ACCOUNT_ID}-${AWS_REGION}"
+          KEY="deploy-bundle.zip"
+
+          # Content hash of the source deploy files (not the zip — zips aren't
+          # byte-stable). Stored on the object as x-amz-meta-contentsha.
+          NEW_HASH="$(cat taskdef.json appspec.yaml | sha256sum | cut -d' ' -f1)"
+
+          # Hash on the current object, or "" if the object doesn't exist.
+          CUR_HASH="$(aws s3api head-object --bucket "$DEPLOY_BUCKET" --key "$KEY" \
+            --query 'Metadata.contentsha' --output text 2>/dev/null || echo "")"
+
+          if [ "$NEW_HASH" = "$CUR_HASH" ]; then
+            echo "Deploy files unchanged — skipping upload (hash $NEW_HASH)."
           else
-            git add taskdef.json appspec.yaml
-            git commit -m "ci: render deploy files for ${GITHUB_SHA::7}"
-            git push
+            echo "Deploy files changed or first run — publishing bundle."
+            zip -j deploy-bundle.zip taskdef.json appspec.yaml
+            aws s3 cp deploy-bundle.zip "s3://${DEPLOY_BUCKET}/${KEY}" \
+              --metadata "contentsha=${NEW_HASH}"
+            echo "Published s3://${DEPLOY_BUCKET}/${KEY}"
           fi
 
       # -----------------------------------------------------------------
-      # 6. Authenticate Docker to the private ECR registry.
+      # 5. Authenticate Docker to the private ECR registry.
       # -----------------------------------------------------------------
       - name: Login to Amazon ECR
         id: ecr-login
         uses: aws-actions/amazon-ecr-login@v2
 
       # -----------------------------------------------------------------
-      # 7. Build and push the image. Pushing `latest` is what fires the
+      # 6. Build and push the image. Pushing `latest` is what fires the
       #    EventBridge rule that starts the pipeline.
       # -----------------------------------------------------------------
       - name: Build, tag, and push image to ECR
@@ -127,16 +117,14 @@ jobs:
           docker push "${IMAGE}"
 
       # -----------------------------------------------------------------
-      # 8. Summarize the run for easier auditing.
+      # 7. Summarize the run for easier auditing.
       # -----------------------------------------------------------------
       - name: Write run summary
         if: success()
         run: |
           {
-            echo "### Image pushed to Amazon ECR"
+            echo "### Deploy bundle + image"
             echo ""
-            echo "- Registry: \`${ECR_REGISTRY}\`"
-            echo "- Repository: \`${ECR_REPOSITORY}\`"
-            echo "- Tag: \`latest\`"
-            echo "- Deploy files rendered from \`taskdef.json.tpl\` / \`appspec.yaml.tpl\`"
+            echo "- Deploy bundle: \`s3://${PROJECT_NAME}-deploy-source-${ACCOUNT_ID}-${AWS_REGION}/deploy-bundle.zip\` (re-uploaded only on change)"
+            echo "- Image: \`${ECR_REGISTRY}/${ECR_REPOSITORY}:latest\`"
           } >> "$GITHUB_STEP_SUMMARY"

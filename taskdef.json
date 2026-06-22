@@ -1,11 +1,11 @@
 {
-  "family": "ecs-ci-cd-task",
+  "family": "photo-uploader-task",
   "networkMode": "awsvpc",
   "requiresCompatibilities": ["FARGATE"],
   "cpu": "512",
   "memory": "1024",
-  "executionRoleArn": "arn:aws:iam::825765391206:role/ecs-ci-cd-task-exec-role",
-  "taskRoleArn": "arn:aws:iam::825765391206:role/ecs-ci-cd-task-role",
+  "executionRoleArn": "arn:aws:iam::825765391206:role/photo-uploader-task-exec-role",
+  "taskRoleArn": "arn:aws:iam::825765391206:role/photo-uploader-task-role",
   "runtimePlatform": {
     "operatingSystemFamily": "LINUX",
     "cpuArchitecture": "X86_64"
@@ -18,10 +18,14 @@
       "portMappings": [
         { "containerPort": 8080, "protocol": "tcp" }
       ],
+      "environment": [
+        { "name": "PROJECT_NAME", "value": "photo-uploader" },
+        { "name": "AWS_REGION", "value": "eu-central-1" }
+      ],
       "logConfiguration": {
         "logDriver": "awslogs",
         "options": {
-          "awslogs-group": "/ecs/ecs-ci-cd",
+          "awslogs-group": "/ecs/photo-uploader",
           "awslogs-region": "eu-central-1",
           "awslogs-stream-prefix": "app"
         }
