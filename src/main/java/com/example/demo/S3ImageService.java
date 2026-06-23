@@ -4,6 +4,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 import software.amazon.awssdk.core.sync.RequestBody;
 import software.amazon.awssdk.services.s3.S3Client;
+import software.amazon.awssdk.services.s3.model.DeleteObjectRequest;
 import software.amazon.awssdk.services.s3.model.PutObjectRequest;
 
 import java.io.IOException;
@@ -39,5 +40,13 @@ public class S3ImageService {
                 RequestBody.fromBytes(file.getBytes()));
 
         return key;
+    }
+
+    /** Removes the object from the bucket. */
+    public void delete(String key) {
+        s3.deleteObject(DeleteObjectRequest.builder()
+                .bucket(settings.getImageBucket())
+                .key(key)
+                .build());
     }
 }
