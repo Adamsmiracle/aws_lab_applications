@@ -29,6 +29,13 @@
           "awslogs-region": "eu-central-1",
           "awslogs-stream-prefix": "app"
         }
+      },
+      "healthCheck": {
+        "command": ["CMD-SHELL", "wget -q -O /dev/null http://localhost:8080/healthz || exit 1"],
+        "interval": 30,
+        "timeout": 5,
+        "retries": 3,
+        "startPeriod": 40
       }
     }
   ]
