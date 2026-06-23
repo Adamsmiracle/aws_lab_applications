@@ -2,8 +2,8 @@
   "family": "photo-uploader-task",
   "networkMode": "awsvpc",
   "requiresCompatibilities": ["FARGATE"],
-  "cpu": "512",
-  "memory": "1024",
+  "cpu": "1024",
+  "memory": "2048",
   "executionRoleArn": "arn:aws:iam::825765391206:role/photo-uploader-task-exec-role",
   "taskRoleArn": "arn:aws:iam::825765391206:role/photo-uploader-task-role",
   "runtimePlatform": {
