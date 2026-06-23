@@ -8,6 +8,8 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.ResponseBody;
 import org.springframework.web.multipart.MultipartFile;
 
+import java.util.List;
+
 @Controller
 public class GalleryController {
 
@@ -25,19 +27,24 @@ public class GalleryController {
     @GetMapping(value = "/", produces = MediaType.TEXT_HTML_VALUE)
     @ResponseBody
     public String gallery() {
+        List<Photo> photos = repo.findAllNewestFirst();
+
         StringBuilder cards = new StringBuilder();
-        for (Photo p : repo.findAllNewestFirst()) {
+        for (Photo p : photos) {
             String url = "https://" + settings.getCloudFrontDomain() + "/" + p.s3Key();
+            String desc = escape(p.description());
             cards.append("<figure class='card'>")
-                 .append("<img loading='lazy' src='").append(url).append("' alt='")
-                 .append(escape(p.description())).append("'>")
-                 .append("<figcaption>").append(escape(p.description())).append("</figcaption>")
+                 .append("<div class='thumb'><img loading='lazy' src='").append(url)
+                 .append("' alt='").append(desc).append("'></div>")
+                 .append("<figcaption>").append(desc.isEmpty() ? "<span class='muted'>No description</span>" : desc).append("</figcaption>")
                  .append("</figure>");
         }
-        if (cards.length() == 0) {
-            cards.append("<p class='empty'>No photos yet — upload the first one!</p>");
-        }
-        return PAGE.replace("<!--CARDS-->", cards.toString());
+        String body = photos.isEmpty()
+                ? "<p class='empty'>No photos yet — upload the first one above. ✨</p>"
+                : cards.toString();
+
+        return PAGE.replace("<!--CARDS-->", body)
+                   .replace("<!--COUNT-->", String.valueOf(photos.size()));
     }
 
     /** Handle an upload: image bytes -> S3, description -> RDS, then back to the gallery. */
@@ -66,36 +73,141 @@ public class GalleryController {
               <meta name="viewport" content="width=device-width, initial-scale=1.0">
               <title>Photo Gallery</title>
               <style>
+                :root {
+                  --bg: #0b0e1f; --panel: #161a33; --panel-2: #1d2244;
+                  --text: #ececf5; --muted: #8a8fc0; --line: #2a2f55; --accent: #6b7bff;
+                }
                 * { box-sizing: border-box; }
-                body { font-family: 'Segoe UI', system-ui, sans-serif; margin: 0;
-                       background: #0f1226; color: #e8e8f0; }
-                header { padding: 1.5rem; text-align: center; background: #171a33; }
-                header h1 { margin: 0; font-weight: 600; }
-                .upload { display: flex; gap: .5rem; flex-wrap: wrap; justify-content: center;
-                          padding: 1rem; background: #14172b; }
-                .upload input[type=text] { flex: 1 1 240px; padding: .6rem .8rem; border-radius: 8px;
-                          border: 1px solid #2a2f55; background: #0f1226; color: #e8e8f0; }
-                .upload input[type=file] { color: #b9bce0; }
-                .upload button { padding: .6rem 1.2rem; border: 0; border-radius: 8px;
-                          background: #5468ff; color: #fff; font-weight: 600; cursor: pointer; }
-                .upload button:hover { background: #3f53e6; }
-                .grid { display: grid; gap: 1rem; padding: 1.5rem;
-                        grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); }
-                .card { margin: 0; background: #171a33; border-radius: 12px; overflow: hidden;
-                        box-shadow: 0 4px 14px rgba(0,0,0,.3); }
-                .card img { width: 100%; height: 200px; object-fit: cover; display: block; }
-                .card figcaption { padding: .7rem .8rem; font-size: .9rem; color: #c7cae8; }
-                .empty { text-align: center; color: #8c90bf; padding: 3rem; grid-column: 1 / -1; }
+                body {
+                  font-family: 'Segoe UI', system-ui, -apple-system, sans-serif; margin: 0;
+                  background: radial-gradient(1200px 600px at 50% -10%, #1a1f44 0%, var(--bg) 55%);
+                  color: var(--text); min-height: 100vh;
+                }
+                header {
+                  position: sticky; top: 0; z-index: 5;
+                  display: flex; align-items: center; justify-content: space-between;
+                  gap: 1rem; padding: 1rem 1.5rem;
+                  background: rgba(11,14,31,.78); backdrop-filter: blur(10px);
+                  border-bottom: 1px solid var(--line);
+                }
+                header h1 { margin: 0; font-size: 1.25rem; font-weight: 700; letter-spacing: .2px; }
+                .count { font-size: .85rem; color: var(--muted);
+                         background: var(--panel-2); padding: .3rem .7rem; border-radius: 999px;
+                         border: 1px solid var(--line); }
+                .upload {
+                  display: flex; gap: .6rem; flex-wrap: wrap; align-items: center;
+                  max-width: 1100px; margin: 1.25rem auto 0; padding: 1rem 1.25rem;
+                  background: var(--panel); border: 1px solid var(--line); border-radius: 14px;
+                }
+                .upload input[type=text] {
+                  flex: 1 1 240px; padding: .65rem .85rem; border-radius: 10px;
+                  border: 1px solid var(--line); background: var(--bg); color: var(--text);
+                }
+                .upload input[type=text]:focus { outline: 2px solid var(--accent); border-color: transparent; }
+                .upload input[type=file] { color: var(--muted); font-size: .9rem; }
+                .upload button {
+                  padding: .65rem 1.4rem; border: 0; border-radius: 10px; cursor: pointer;
+                  background: linear-gradient(135deg, #6b7bff, #8a63ff); color: #fff; font-weight: 700;
+                  transition: transform .12s ease, filter .12s ease;
+                }
+                .upload button:hover { filter: brightness(1.08); transform: translateY(-1px); }
+                .grid {
+                  display: grid; gap: 1.1rem; max-width: 1100px; margin: 1.25rem auto; padding: 0 1.25rem 3rem;
+                  grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
+                }
+                .card {
+                  margin: 0; background: var(--panel); border: 1px solid var(--line);
+                  border-radius: 14px; overflow: hidden;
+                  transition: transform .16s ease, box-shadow .16s ease, border-color .16s ease;
+                }
+                .card:hover { transform: translateY(-4px); box-shadow: 0 12px 30px rgba(0,0,0,.45);
+                              border-color: var(--accent); }
+                .thumb { overflow: hidden; }
+                .card img {
+                  width: 100%; height: 210px; object-fit: cover; display: block; cursor: zoom-in;
+                  transition: transform .35s ease;
+                }
+                .card:hover img { transform: scale(1.06); }
+                .card figcaption { padding: .75rem .9rem; font-size: .92rem; color: #cdd0ee; line-height: 1.4; }
+                .muted { color: var(--muted); font-style: italic; }
+                .empty { text-align: center; color: var(--muted); padding: 4rem 1rem; grid-column: 1 / -1;
+                         font-size: 1.05rem; }
+
+                /* Lightbox */
+                .lightbox {
+                  position: fixed; inset: 0; z-index: 50; display: flex; flex-direction: column;
+                  align-items: center; justify-content: center; gap: 1rem; padding: 2rem;
+                  background: rgba(5,7,18,.86); backdrop-filter: blur(6px);
+                  animation: fade .18s ease; cursor: zoom-out;
+                }
+                .lightbox[hidden] { display: none; }
+                .lightbox img {
+                  max-width: min(92vw, 1100px); max-height: 78vh; border-radius: 12px;
+                  box-shadow: 0 20px 60px rgba(0,0,0,.6); cursor: default;
+                }
+                .lightbox figcaption { color: var(--text); max-width: 80vw; text-align: center; font-size: 1rem; }
+                .lb-close {
+                  position: absolute; top: 1rem; right: 1.25rem; font-size: 2rem; line-height: 1;
+                  color: #fff; cursor: pointer; opacity: .8;
+                }
+                .lb-close:hover { opacity: 1; }
+                @keyframes fade { from { opacity: 0 } to { opacity: 1 } }
               </style>
             </head>
             <body>
-              <header><h1>📸 Photo Gallery</h1></header>
+              <header>
+                <h1>📸 Photo Gallery</h1>
+                <span class="count"><!--COUNT--> photos</span>
+              </header>
+
               <form class="upload" action="/upload" method="post" enctype="multipart/form-data">
                 <input type="file" name="image" accept="image/*" required>
                 <input type="text" name="description" placeholder="Add a description…" maxlength="280">
                 <button type="submit">Upload</button>
               </form>
+
               <main class="grid"><!--CARDS--></main>
+
+              <div id="lightbox" class="lightbox" hidden>
+                <span class="lb-close" aria-label="Close">&times;</span>
+                <img id="lb-img" src="" alt="">
+                <figcaption id="lb-cap"></figcaption>
+              </div>
+
+              <script>
+                (function () {
+                  var lb = document.getElementById("lightbox");
+                  var lbImg = document.getElementById("lb-img");
+                  var lbCap = document.getElementById("lb-cap");
+
+                  function open(src, cap) {
+                    lbImg.src = src;
+                    lbCap.textContent = cap || "";
+                    lb.hidden = false;
+                    document.body.style.overflow = "hidden";
+                  }
+                  function close() {
+                    lb.hidden = true;
+                    lbImg.src = "";
+                    document.body.style.overflow = "";
+                  }
+
+                  document.querySelector(".grid").addEventListener("click", function (e) {
+                    var img = e.target.closest(".card img");
+                    if (!img) return;
+                    var fig = img.closest(".card");
+                    var capEl = fig ? fig.querySelector("figcaption") : null;
+                    open(img.src, capEl ? capEl.textContent.trim() : "");
+                  });
+
+                  // Click backdrop or X closes; clicking the image itself does not.
+                  lb.addEventListener("click", close);
+                  lbImg.addEventListener("click", function (e) { e.stopPropagation(); });
+                  document.addEventListener("keydown", function (e) {
+                    if (e.key === "Escape" && !lb.hidden) close();
+                  });
+                })();
+              </script>
             </body>
             </html>
             """;
