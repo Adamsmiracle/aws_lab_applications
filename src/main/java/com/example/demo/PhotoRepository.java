@@ -31,6 +31,7 @@ public class PhotoRepository {
                 "SELECT id, s3_key, description, created_at FROM photos ORDER BY created_at DESC", MAPPER);
     }
 
+    
     public Photo findById(long id) {
         List<Photo> rows = jdbc.query(
                 "SELECT id, s3_key, description, created_at FROM photos WHERE id = ?", MAPPER, id);
