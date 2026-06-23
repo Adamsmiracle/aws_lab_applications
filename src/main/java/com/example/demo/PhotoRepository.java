@@ -31,13 +31,14 @@ public class PhotoRepository {
                 "SELECT id, s3_key, description, created_at FROM photos ORDER BY created_at DESC", MAPPER);
     }
 
-    
+
     public Photo findById(long id) {
         List<Photo> rows = jdbc.query(
                 "SELECT id, s3_key, description, created_at FROM photos WHERE id = ?", MAPPER, id);
         return rows.isEmpty() ? null : rows.get(0);
     }
 
+    
     public void updateDescription(long id, String description) {
         jdbc.update("UPDATE photos SET description = ? WHERE id = ?", description, id);
     }
