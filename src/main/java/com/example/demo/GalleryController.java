@@ -22,6 +22,7 @@ public class GalleryController {
     private final S3ImageService images;
     private final AppSettings settings;
 
+    
     public GalleryController(PhotoRepository repo, S3ImageService images, AppSettings settings) {
         this.repo = repo;
         this.images = images;
