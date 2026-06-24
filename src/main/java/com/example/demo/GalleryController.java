@@ -14,8 +14,6 @@ import java.util.Set;
 @Controller
 public class GalleryController {
 
-    // Formats browsers can actually render in <img>. HEIC/HEIF are excluded on
-    // purpose — iPhones produce them but no major browser displays them.
     private static final Set<String> ALLOWED_TYPES =
             Set.of("image/jpeg", "image/png", "image/webp", "image/gif");
 
