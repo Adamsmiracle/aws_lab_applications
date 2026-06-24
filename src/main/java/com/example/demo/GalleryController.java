@@ -221,6 +221,15 @@ public class GalleryController {
                   color: #fff; cursor: pointer; opacity: .8;
                 }
                 .lb-close:hover { opacity: 1; }
+                .lb-nav {
+                  position: absolute; top: 50%; transform: translateY(-50%);
+                  background: rgba(255,255,255,.12); border: 0; color: #fff;
+                  font-size: 3rem; line-height: 1; padding: .4rem 1rem;
+                  border-radius: 10px; cursor: pointer; transition: background .15s ease;
+                }
+                .lb-nav:hover { background: rgba(255,255,255,.25); }
+                .lb-prev { left: 1.25rem; }
+                .lb-next { right: 1.25rem; }
                 @keyframes fade { from { opacity: 0 } to { opacity: 1 } }
               </style>
             </head>
@@ -249,7 +258,9 @@ public class GalleryController {
 
               <div id="lightbox" class="lightbox" hidden>
                 <span class="lb-close" aria-label="Close">&times;</span>
+                <button class="lb-nav lb-prev" aria-label="Previous">&#8249;</button>
                 <img id="lb-img" src="" alt="">
+                <button class="lb-nav lb-next" aria-label="Next">&#8250;</button>
                 <figcaption id="lb-cap"></figcaption>
               </div>
 
@@ -270,27 +281,61 @@ public class GalleryController {
                   });
                 })();
 
-                // --- Lightbox (click a photo to zoom) ---
+                // --- Lightbox with prev/next navigation ---
                 (function () {
-                  var lb = document.getElementById("lightbox");
-                  var lbImg = document.getElementById("lb-img");
-                  var lbCap = document.getElementById("lb-cap");
-                  function open(src, cap) {
-                    lbImg.src = src; lbCap.textContent = cap || "";
-                    lb.hidden = false; document.body.style.overflow = "hidden";
+                  var lb     = document.getElementById("lightbox");
+                  var lbImg  = document.getElementById("lb-img");
+                  var lbCap  = document.getElementById("lb-cap");
+                  var lbPrev = document.querySelector(".lb-prev");
+                  var lbNext = document.querySelector(".lb-next");
+                  var slides = [];
+                  var current = 0;
+
+                  function buildSlides() {
+                    slides = Array.from(document.querySelectorAll(".grid .card img")).map(function (img) {
+                      return { src: img.src, cap: img.getAttribute("data-desc") || "" };
+                    });
                   }
+
+                  function show(index) {
+                    current = (index + slides.length) % slides.length;
+                    lbImg.src = slides[current].src;
+                    lbCap.textContent = slides[current].cap;
+                    var single = slides.length <= 1;
+                    lbPrev.hidden = single;
+                    lbNext.hidden = single;
+                  }
+
+                  function open(index) {
+                    buildSlides();
+                    show(index);
+                    lb.hidden = false;
+                    document.body.style.overflow = "hidden";
+                  }
+
                   function close() {
                     lb.hidden = true; lbImg.src = ""; document.body.style.overflow = "";
                   }
+
                   document.querySelector(".grid").addEventListener("click", function (e) {
                     var img = e.target.closest(".card img");
                     if (!img) return;
-                    open(img.src, img.getAttribute("data-desc") || "");
+                    open(Array.from(document.querySelectorAll(".grid .card img")).indexOf(img));
                   });
-                  lb.addEventListener("click", close);
+
+                  lb.addEventListener("click", function (e) { if (e.target === lb) close(); });
+                  document.querySelector(".lb-close").addEventListener("click", function (e) {
+                    e.stopPropagation(); close();
+                  });
                   lbImg.addEventListener("click", function (e) { e.stopPropagation(); });
+                  lbPrev.addEventListener("click", function (e) { e.stopPropagation(); show(current - 1); });
+                  lbNext.addEventListener("click", function (e) { e.stopPropagation(); show(current + 1); });
+
                   document.addEventListener("keydown", function (e) {
-                    if (e.key === "Escape" && !lb.hidden) close();
+                    if (lb.hidden) return;
+                    if (e.key === "Escape")     close();
+                    if (e.key === "ArrowLeft")  show(current - 1);
+                    if (e.key === "ArrowRight") show(current + 1);
                   });
                 })();
               </script>
