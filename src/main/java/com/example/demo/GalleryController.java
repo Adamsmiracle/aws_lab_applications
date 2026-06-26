@@ -22,13 +22,14 @@ public class GalleryController {
     private final S3ImageService images;
     private final AppSettings settings;
 
-    
+
     public GalleryController(PhotoRepository repo, S3ImageService images, AppSettings settings) {
         this.repo = repo;
         this.images = images;
         this.settings = settings;
     }
 
+    
     /** Gallery UI. Doubles as the ALB health check (returns 200 even when empty). */
     @GetMapping(value = "/", produces = MediaType.TEXT_HTML_VALUE)
     @ResponseBody
