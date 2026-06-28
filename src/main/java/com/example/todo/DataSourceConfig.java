@@ -1,4 +1,4 @@
-package com.example.demo;
+package com.example.todo;
 
 import com.zaxxer.hikari.HikariConfig;
 import com.zaxxer.hikari.HikariDataSource;
@@ -22,7 +22,7 @@ public class DataSourceConfig {
         cfg.setUsername(settings.getDbUsername());
         cfg.setPassword(settings.getDbPassword());
         cfg.setMaximumPoolSize(5);
-        cfg.setPoolName("photo-gallery-pool");
+        cfg.setPoolName("todo-app-pool");
         return new HikariDataSource(cfg);
     }
 }

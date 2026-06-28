@@ -1,7 +1,7 @@
 -- Run on startup by Spring (spring.sql.init.mode=always). Idempotent.
-CREATE TABLE IF NOT EXISTS photos (
+CREATE TABLE IF NOT EXISTS tasks (
     id          BIGSERIAL PRIMARY KEY,
-    s3_key      TEXT        NOT NULL,
-    description TEXT,
+    title       TEXT        NOT NULL,
+    completed   BOOLEAN     NOT NULL DEFAULT false,
     created_at  TIMESTAMPTZ NOT NULL DEFAULT now()
 );

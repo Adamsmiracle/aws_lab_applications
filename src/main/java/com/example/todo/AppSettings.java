@@ -1,4 +1,4 @@
-package com.example.demo;
+package com.example.todo;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -22,16 +22,16 @@ import java.util.Map;
 @Component
 public class AppSettings {
 
-    private String imageBucket;
-    private String cloudFrontDomain;
     private String dbEndpoint;
     private String dbName;
     private String dbUsername;
     private String dbPassword;
+    private String redisEndpoint;
+    private int redisPort;
 
     @PostConstruct
     void load() throws Exception {
-        String project = System.getenv().getOrDefault("PROJECT_NAME", "photo-uploader");
+        String project = System.getenv().getOrDefault("PROJECT_NAME", "todo-app");
         String prefix = "/" + project + "/";
 
         Map<String, String> params = new HashMap<>();
@@ -51,10 +51,10 @@ public class AppSettings {
             } while (token != null);
         }
 
-        this.imageBucket = require(params, prefix + "image-bucket");
-        this.cloudFrontDomain = require(params, prefix + "cloudfront-domain");
         this.dbEndpoint = require(params, prefix + "db-endpoint");
         this.dbName = require(params, prefix + "db-name");
+        this.redisEndpoint = require(params, prefix + "redis-endpoint");
+        this.redisPort = Integer.parseInt(require(params, prefix + "redis-port"));
         String dbSecretArn = require(params, prefix + "db-secret-arn");
 
         try (SecretsManagerClient sm = SecretsManagerClient.create()) {
@@ -74,10 +74,10 @@ public class AppSettings {
         return v;
     }
 
-    public String getImageBucket()      { return imageBucket; }
-    public String getCloudFrontDomain() { return cloudFrontDomain; }
-    public String getDbEndpoint()       { return dbEndpoint; }
-    public String getDbName()           { return dbName; }
-    public String getDbUsername()       { return dbUsername; }
-    public String getDbPassword()       { return dbPassword; }
+    public String getDbEndpoint()    { return dbEndpoint; }
+    public String getDbName()        { return dbName; }
+    public String getDbUsername()    { return dbUsername; }
+    public String getDbPassword()    { return dbPassword; }
+    public String getRedisEndpoint() { return redisEndpoint; }
+    public int    getRedisPort()     { return redisPort; }
 }

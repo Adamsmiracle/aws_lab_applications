@@ -14,7 +14,7 @@ name: Build app image and publish deploy bundle
 on:
   push:
     branches:
-      - photo_upload
+      - todo
 
 # id-token: mint an OIDC JWT for AWS STS (no long-lived keys).
 # contents: read is the default — we no longer commit anything back to the repo.
@@ -29,7 +29,7 @@ env:
   ECR_REPOSITORY: ${{ secrets.ECR_REPOSITORY }}
   # Used to derive the deploy-source bucket name (must match the infra stack):
   #   <PROJECT_NAME>-deploy-source-<ACCOUNT_ID>-<REGION>
-  PROJECT_NAME: photo-uploader
+  PROJECT_NAME: todo-app
 
 jobs:
   build-and-push:

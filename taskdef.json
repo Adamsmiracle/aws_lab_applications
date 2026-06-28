@@ -1,11 +1,11 @@
 {
-  "family": "photo-uploader-task",
+  "family": "todo-app-task",
   "networkMode": "awsvpc",
   "requiresCompatibilities": ["FARGATE"],
   "cpu": "1024",
   "memory": "2048",
-  "executionRoleArn": "arn:aws:iam::825765391206:role/photo-uploader-task-exec-role",
-  "taskRoleArn": "arn:aws:iam::825765391206:role/photo-uploader-task-role",
+  "executionRoleArn": "arn:aws:iam::825765391206:role/todo-app-task-exec-role",
+  "taskRoleArn": "arn:aws:iam::825765391206:role/todo-app-task-role",
   "runtimePlatform": {
     "operatingSystemFamily": "LINUX",
     "cpuArchitecture": "X86_64"
@@ -19,13 +19,13 @@
         { "containerPort": 8080, "protocol": "tcp" }
       ],
       "environment": [
-        { "name": "PROJECT_NAME", "value": "photo-uploader" },
+        { "name": "PROJECT_NAME", "value": "todo-app" },
         { "name": "AWS_REGION", "value": "eu-central-1" }
       ],
       "logConfiguration": {
         "logDriver": "awslogs",
         "options": {
-          "awslogs-group": "/ecs/photo-uploader",
+          "awslogs-group": "/ecs/todo-app",
           "awslogs-region": "eu-central-1",
           "awslogs-stream-prefix": "app"
         }
