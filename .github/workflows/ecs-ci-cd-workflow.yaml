@@ -26,7 +26,7 @@ env:
   AWS_REGION: ${{ secrets.AWS_REGION }}
   AWS_ROLE_ARN_ECS_CI_CD: ${{ secrets.AWS_ROLE_ARN_TODO }}
   ECR_REGISTRY: ${{ secrets.ECR_REGISTRY }}
-  ECR_REPOSITORY: ${{ secrets.ECR_REPOSITORY }}
+  ECR_REPOSITORY: ${{ secrets.ECR_TODO_REPOSITORY }}
   # Used to derive the deploy-source bucket name (must match the infra stack):
   #   <PROJECT_NAME>-deploy-source-<ACCOUNT_ID>-<REGION>
   PROJECT_NAME: todo-app
