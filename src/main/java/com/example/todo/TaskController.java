@@ -7,7 +7,6 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.ResponseBody;
 
-import java.time.OffsetDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
 import java.util.Locale;
@@ -176,9 +175,20 @@ public class TaskController {
               <title>Tasks</title>
               <style>
                 :root {
-                  --bg: #f4f5f7; --card: #ffffff; --text: #1d2433; --muted: #8b92a4;
-                  --line: #e7e9ef; --accent: #4f46e5; --accent-soft: #eef0fe;
-                  --ok: #16a34a; --danger: #e11d48; --shadow: 0 1px 2px rgba(16,24,40,.06), 0 8px 24px rgba(16,24,40,.06);
+                  --bg: #f4f5f7; --card: #ffffff; --field: #ffffff; --hover: #f4f5f7;
+                  --text: #1d2433; --muted: #8b92a4; --line: #e7e9ef;
+                  --accent: #4f46e5; --accent-soft: #eef0fe; --ok: #16a34a;
+                  --danger: #e11d48; --danger-soft: #fde8ee; --chip: rgba(0,0,0,.06);
+                  --shadow: 0 1px 2px rgba(16,24,40,.06), 0 8px 24px rgba(16,24,40,.06);
+                  color-scheme: light;
+                }
+                :root[data-theme="dark"] {
+                  --bg: #0e1016; --card: #181b23; --field: #20242e; --hover: #20242e;
+                  --text: #e7e9ef; --muted: #8b92a4; --line: #272b35;
+                  --accent: #6366f1; --accent-soft: #20233a; --ok: #22c55e;
+                  --danger: #fb7185; --danger-soft: rgba(251,113,133,.14); --chip: rgba(255,255,255,.08);
+                  --shadow: 0 1px 2px rgba(0,0,0,.4), 0 10px 30px rgba(0,0,0,.5);
+                  color-scheme: dark;
                 }
                 * { box-sizing: border-box; }
                 html, body { height: 100%; }
@@ -186,14 +196,24 @@ public class TaskController {
                   margin: 0; color: var(--text); background: var(--bg);
                   font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, system-ui, sans-serif;
                   -webkit-font-smoothing: antialiased;
+                  transition: background .2s, color .2s;
                 }
                 .wrap { max-width: 640px; margin: 0 auto; padding: 3rem 1.25rem 4rem; }
 
-                .head { display: flex; align-items: center; gap: .7rem; margin-bottom: 1.5rem; }
+                .head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 1.5rem; }
+                .brand { display: flex; align-items: center; gap: .7rem; }
                 .logo { width: 38px; height: 38px; border-radius: 10px; display: grid; place-items: center;
                         background: var(--accent); color: #fff; box-shadow: var(--shadow); }
                 .head h1 { margin: 0; font-size: 1.4rem; font-weight: 700; letter-spacing: -.01em; }
                 .head p { margin: .1rem 0 0; font-size: .85rem; color: var(--muted); }
+                .theme-toggle { width: 38px; height: 38px; border-radius: 10px; cursor: pointer;
+                                border: 1px solid var(--line); background: var(--card); color: var(--text);
+                                display: grid; place-items: center; box-shadow: var(--shadow);
+                                transition: border-color .15s, color .15s; }
+                .theme-toggle:hover { border-color: var(--accent); color: var(--accent); }
+                .icon-sun { display: none; }
+                :root[data-theme="dark"] .icon-sun { display: block; }
+                :root[data-theme="dark"] .icon-moon { display: none; }
 
                 .card { background: var(--card); border: 1px solid var(--line); border-radius: 16px;
                         box-shadow: var(--shadow); overflow: hidden; }
@@ -201,7 +221,7 @@ public class TaskController {
                 .add { display: flex; gap: .6rem; padding: 1rem; border-bottom: 1px solid var(--line); }
                 .add input {
                   flex: 1; padding: .7rem .9rem; font-size: .95rem; color: var(--text);
-                  border: 1px solid var(--line); border-radius: 10px; background: #fff; outline: none;
+                  border: 1px solid var(--line); border-radius: 10px; background: var(--field); outline: none;
                   transition: border-color .15s, box-shadow .15s;
                 }
                 .add input::placeholder { color: var(--muted); }
@@ -224,20 +244,20 @@ public class TaskController {
                 .tab { display: inline-flex; align-items: center; gap: .4rem; text-decoration: none;
                        font-size: .82rem; font-weight: 600; color: var(--muted);
                        padding: .35rem .7rem; border-radius: 8px; transition: background .15s, color .15s; }
-                .tab:hover { background: var(--bg); color: var(--text); }
+                .tab:hover { background: var(--hover); color: var(--text); }
                 .tab.active { background: var(--accent-soft); color: var(--accent); }
-                .tab .badge { font-size: .72rem; font-weight: 700; background: rgba(0,0,0,.06);
+                .tab .badge { font-size: .72rem; font-weight: 700; background: var(--chip);
                               color: inherit; padding: .05rem .4rem; border-radius: 999px; }
-                .tab.active .badge { background: rgba(79,70,229,.16); }
+                .tab.active .badge { background: rgba(99,102,241,.18); }
 
                 ul.list { list-style: none; margin: 0; padding: 0 .5rem .5rem; }
                 .item { display: flex; align-items: center; gap: .75rem; padding: .7rem .6rem;
                         border-radius: 10px; transition: background .12s; }
-                .item:hover { background: var(--bg); }
+                .item:hover { background: var(--hover); }
                 .item + .item { border-top: 1px solid var(--line); }
 
                 .check { flex: 0 0 auto; width: 22px; height: 22px; border-radius: 50%; cursor: pointer;
-                         border: 2px solid var(--line); background: #fff; color: #fff; display: grid;
+                         border: 2px solid var(--line); background: var(--card); color: #fff; display: grid;
                          place-items: center; padding: 0; transition: background .15s, border-color .15s; }
                 .check svg { opacity: 0; transition: opacity .12s; }
                 .check:hover { border-color: var(--accent); }
@@ -248,8 +268,8 @@ public class TaskController {
                 .title { width: 100%; border: 1px solid transparent; background: transparent; color: var(--text);
                          font-size: .95rem; padding: .35rem .5rem; border-radius: 8px; outline: none;
                          transition: border-color .15s, background .15s; }
-                .title:hover { background: #fff; border-color: var(--line); }
-                .title:focus { background: #fff; border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+                .title:hover { background: var(--field); border-color: var(--line); }
+                .title:focus { background: var(--field); border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
                 .item.done .title { color: var(--muted); text-decoration: line-through; }
 
                 .date { flex: 0 0 auto; font-size: .76rem; color: var(--muted); min-width: 3rem; text-align: right; }
@@ -259,24 +279,47 @@ public class TaskController {
                            cursor: pointer; padding: .35rem; border-radius: 8px; display: grid; place-items: center;
                            opacity: 0; transition: opacity .12s, background .12s, color .12s; }
                 .item:hover .del-btn { opacity: 1; }
-                .del-btn:hover { background: #fde8ee; color: var(--danger); }
+                .del-btn:hover { background: var(--danger-soft); color: var(--danger); }
 
                 .empty { text-align: center; color: var(--muted); padding: 3rem 1rem; font-size: .95rem; }
 
                 .foot { text-align: center; margin-top: 1.25rem; }
                 .src { font-size: .74rem; color: var(--muted); }
+
+                @media (max-width: 480px) { .date { display: none; } .del-btn { opacity: 1; } }
               </style>
+              <script>
+                // Set theme before paint to avoid a flash of the wrong theme.
+                (function () {
+                  try {
+                    var t = localStorage.getItem('theme') ||
+                            (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+                    document.documentElement.setAttribute('data-theme', t);
+                  } catch (e) {}
+                })();
+                function toggleTheme() {
+                  var next = document.documentElement.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
+                  document.documentElement.setAttribute('data-theme', next);
+                  try { localStorage.setItem('theme', next); } catch (e) {}
+                }
+              </script>
             </head>
             <body>
               <div class="wrap">
                 <div class="head">
-                  <span class="logo">
-                    <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12l5 5L20 6"/></svg>
-                  </span>
-                  <div>
-                    <h1>Tasks</h1>
-                    <p>Stay on top of what matters.</p>
+                  <div class="brand">
+                    <span class="logo">
+                      <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12l5 5L20 6"/></svg>
+                    </span>
+                    <div>
+                      <h1>Tasks</h1>
+                      <p>Stay on top of what matters.</p>
+                    </div>
                   </div>
+                  <button class="theme-toggle" type="button" onclick="toggleTheme()" aria-label="Toggle dark mode" title="Toggle theme">
+                    <svg class="icon-moon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg>
+                    <svg class="icon-sun" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>
+                  </button>
                 </div>
 
                 <div class="card">
