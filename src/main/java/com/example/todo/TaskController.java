@@ -7,10 +7,16 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.ResponseBody;
 
+import java.time.OffsetDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.List;
+import java.util.Locale;
 
 @Controller
 public class TaskController {
+
+    private static final DateTimeFormatter DATE_FMT =
+            DateTimeFormatter.ofPattern("MMM d", Locale.ENGLISH);
 
     private final TaskRepository repo;
     private final TaskCache cache;
@@ -27,7 +33,7 @@ public class TaskController {
      */
     @GetMapping(value = "/", produces = MediaType.TEXT_HTML_VALUE)
     @ResponseBody
-    public String index() {
+    public String index(@RequestParam(value = "filter", required = false, defaultValue = "all") String filter) {
         boolean cacheHit = true;
         List<Task> tasks = cache.read();
         if (tasks == null) {                 // cache miss / outage -> read RDS
@@ -36,46 +42,84 @@ public class TaskController {
             cache.put(tasks);
         }
 
-        long open = tasks.stream().filter(t -> !t.completed()).count();
+        long total = tasks.size();
+        long done = tasks.stream().filter(Task::completed).count();
+        long open = total - done;
+        int percent = total == 0 ? 0 : (int) Math.round(done * 100.0 / total);
+
+        String f = switch (filter == null ? "all" : filter) {
+            case "active", "completed" -> filter;
+            default -> "all";
+        };
 
         StringBuilder rows = new StringBuilder();
         for (Task t : tasks) {
+            if (f.equals("active") && t.completed()) continue;
+            if (f.equals("completed") && !t.completed()) continue;
+
             String title = escape(t.title());
             long id = t.id();
-            String done = t.completed() ? " done" : "";
-            rows.append("<li class='item").append(done).append("'>")
+            String done2 = t.completed() ? " done" : "";
+            String when = t.createdAt() == null ? "" : DATE_FMT.format(t.createdAt());
+
+            rows.append("<li class='item").append(done2).append("'>")
                 // toggle completed
                 .append("<form class='toggle' action='/toggle' method='post'>")
                 .append("<input type='hidden' name='id' value='").append(id).append("'>")
                 .append("<input type='hidden' name='completed' value='").append(!t.completed()).append("'>")
-                .append("<button type='submit' class='check' title='Toggle complete'>")
-                .append(t.completed() ? "✓" : "").append("</button>")
+                .append("<button type='submit' class='check' aria-label='Toggle complete'>")
+                .append("<svg viewBox='0 0 24 24' width='14' height='14' fill='none' stroke='currentColor' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'><path d='M4 12l5 5L20 6'/></svg>")
+                .append("</button>")
                 .append("</form>")
-                // inline title edit
+                // inline title edit (looks like text; saves on Enter or blur-if-changed)
                 .append("<form class='edit' action='/update' method='post'>")
                 .append("<input type='hidden' name='id' value='").append(id).append("'>")
-                .append("<input type='text' name='title' value='").append(title)
-                .append("' maxlength='280' aria-label='Task title'>")
-                .append("<button type='submit' title='Save'>Save</button>")
+                .append("<input class='title' type='text' name='title' value='").append(title)
+                .append("' maxlength='280' aria-label='Task title' autocomplete='off' ")
+                .append("onblur=\"if(this.value.trim()&&this.value!==this.defaultValue)this.form.submit()\">")
                 .append("</form>")
+                .append("<time class='date'>").append(when).append("</time>")
                 // delete
                 .append("<form class='del' action='/delete' method='post' onsubmit=\"return confirm('Delete this task?')\">")
                 .append("<input type='hidden' name='id' value='").append(id).append("'>")
-                .append("<button type='submit' class='danger' title='Delete'>✕</button>")
+                .append("<button type='submit' class='del-btn' aria-label='Delete task'>")
+                .append("<svg viewBox='0 0 24 24' width='16' height='16' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><path d='M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6m5 4v6m4-6v6'/></svg>")
+                .append("</button>")
                 .append("</form>")
                 .append("</li>");
         }
-        String body = tasks.isEmpty()
-                ? "<li class='empty'>Nothing to do yet — add your first task above. ✨</li>"
-                : rows.toString();
+
+        String emptyMsg = switch (f) {
+            case "active"    -> "No active tasks — you're all caught up. 🎉";
+            case "completed" -> "No completed tasks yet.";
+            default          -> "No tasks yet. Add your first one above.";
+        };
+        boolean nothingShown = rows.length() == 0;
+        String body = nothingShown ? "<li class='empty'>" + emptyMsg + "</li>" : rows.toString();
+
+        String summary = total == 0
+                ? "Nothing to do"
+                : done + " of " + total + " completed";
+
+        String filters = tab("all", "All", f, total)
+                       + tab("active", "Active", f, open)
+                       + tab("completed", "Completed", f, done);
 
         String source = cacheHit
-                ? "<span class='src cache'>⚡ served from Redis cache</span>"
-                : "";
+                ? "<span class='src'>⚡ Served from Redis cache</span>"
+                : "<span class='src'>🗄️ Loaded from database</span>";
 
         return PAGE.replace("<!--ROWS-->", body)
-                   .replace("<!--OPEN-->", String.valueOf(open))
+                   .replace("<!--SUMMARY-->", summary)
+                   .replace("<!--PERCENT-->", String.valueOf(percent))
+                   .replace("<!--FILTERS-->", filters)
                    .replace("<!--SOURCE-->", source);
+    }
+
+    private static String tab(String key, String label, String active, long count) {
+        String cls = key.equals(active) ? "tab active" : "tab";
+        return "<a class='" + cls + "' href='/?filter=" + key + "'>" + label
+             + "<span class='badge'>" + count + "</span></a>";
     }
 
     /** Create a task: write to RDS (via proxy), then invalidate the cache. */
@@ -129,94 +173,130 @@ public class TaskController {
             <head>
               <meta charset="UTF-8">
               <meta name="viewport" content="width=device-width, initial-scale=1.0">
-              <title>To-Do</title>
+              <title>Tasks</title>
               <style>
                 :root {
-                  --bg: #0b0e1f; --panel: #161a33; --panel-2: #1d2244;
-                  --text: #ececf5; --muted: #8a8fc0; --line: #2a2f55; --accent: #6b7bff;
-                  --ok: #36d399;
+                  --bg: #f4f5f7; --card: #ffffff; --text: #1d2433; --muted: #8b92a4;
+                  --line: #e7e9ef; --accent: #4f46e5; --accent-soft: #eef0fe;
+                  --ok: #16a34a; --danger: #e11d48; --shadow: 0 1px 2px rgba(16,24,40,.06), 0 8px 24px rgba(16,24,40,.06);
                 }
                 * { box-sizing: border-box; }
+                html, body { height: 100%; }
                 body {
-                  font-family: 'Segoe UI', system-ui, -apple-system, sans-serif; margin: 0;
-                  background: radial-gradient(1200px 600px at 50% -10%, #1a1f44 0%, var(--bg) 55%);
-                  color: var(--text); min-height: 100vh;
+                  margin: 0; color: var(--text); background: var(--bg);
+                  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, system-ui, sans-serif;
+                  -webkit-font-smoothing: antialiased;
                 }
-                header {
-                  position: sticky; top: 0; z-index: 5;
-                  display: flex; align-items: center; justify-content: space-between;
-                  gap: 1rem; padding: 1rem 1.5rem;
-                  background: rgba(11,14,31,.78); backdrop-filter: blur(10px);
-                  border-bottom: 1px solid var(--line);
+                .wrap { max-width: 640px; margin: 0 auto; padding: 3rem 1.25rem 4rem; }
+
+                .head { display: flex; align-items: center; gap: .7rem; margin-bottom: 1.5rem; }
+                .logo { width: 38px; height: 38px; border-radius: 10px; display: grid; place-items: center;
+                        background: var(--accent); color: #fff; box-shadow: var(--shadow); }
+                .head h1 { margin: 0; font-size: 1.4rem; font-weight: 700; letter-spacing: -.01em; }
+                .head p { margin: .1rem 0 0; font-size: .85rem; color: var(--muted); }
+
+                .card { background: var(--card); border: 1px solid var(--line); border-radius: 16px;
+                        box-shadow: var(--shadow); overflow: hidden; }
+
+                .add { display: flex; gap: .6rem; padding: 1rem; border-bottom: 1px solid var(--line); }
+                .add input {
+                  flex: 1; padding: .7rem .9rem; font-size: .95rem; color: var(--text);
+                  border: 1px solid var(--line); border-radius: 10px; background: #fff; outline: none;
+                  transition: border-color .15s, box-shadow .15s;
                 }
-                header h1 { margin: 0; font-size: 1.25rem; font-weight: 700; letter-spacing: .2px; }
-                .count { font-size: .85rem; color: var(--muted);
-                         background: var(--panel-2); padding: .3rem .7rem; border-radius: 999px;
-                         border: 1px solid var(--line); }
-                main { max-width: 720px; margin: 1.25rem auto; padding: 0 1.25rem 3rem; }
-                .add {
-                  display: flex; gap: .6rem; align-items: center;
-                  padding: 1rem 1.25rem; background: var(--panel);
-                  border: 1px solid var(--line); border-radius: 14px;
-                }
-                .add input[type=text] {
-                  flex: 1; padding: .65rem .85rem; border-radius: 10px;
-                  border: 1px solid var(--line); background: var(--bg); color: var(--text);
-                }
-                .add input[type=text]:focus { outline: 2px solid var(--accent); border-color: transparent; }
+                .add input::placeholder { color: var(--muted); }
+                .add input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
                 .add button {
-                  padding: .65rem 1.4rem; border: 0; border-radius: 10px; cursor: pointer;
-                  background: linear-gradient(135deg, #6b7bff, #8a63ff); color: #fff; font-weight: 700;
+                  padding: 0 1.2rem; border: 0; border-radius: 10px; cursor: pointer; font-weight: 600;
+                  font-size: .92rem; background: var(--accent); color: #fff; transition: filter .15s, transform .05s;
                 }
-                .add button:hover { filter: brightness(1.08); }
-                .src { display: inline-block; margin: .9rem .2rem 0; font-size: .82rem;
-                       padding: .25rem .65rem; border-radius: 999px; border: 1px solid var(--line); }
-                .src.cache { color: #cfe9ff; background: #14233a; }
-                .src.db { color: #ffe9c2; background: #2e2410; }
-                ul.list { list-style: none; margin: 1rem 0 0; padding: 0; display: flex; flex-direction: column; gap: .6rem; }
-                .item {
-                  display: flex; gap: .5rem; align-items: center;
-                  background: var(--panel); border: 1px solid var(--line);
-                  border-radius: 12px; padding: .55rem .7rem;
-                }
-                .item.done .edit input[type=text] { text-decoration: line-through; color: var(--muted); }
-                .check {
-                  width: 28px; height: 28px; flex: 0 0 auto; border-radius: 50%;
-                  border: 1px solid var(--line); background: var(--bg); color: var(--ok);
-                  cursor: pointer; font-weight: 800;
-                }
-                .item.done .check { background: var(--ok); color: #04210f; border-color: var(--ok); }
-                .edit { display: flex; gap: .4rem; flex: 1; min-width: 0; }
-                .edit input[type=text] {
-                  flex: 1; min-width: 0; padding: .42rem .55rem; border-radius: 8px;
-                  border: 1px solid var(--line); background: var(--bg); color: var(--text); font-size: .92rem;
-                }
-                .item button[type=submit] {
-                  padding: .42rem .75rem; border: 0; border-radius: 8px; cursor: pointer;
-                  font-size: .8rem; font-weight: 600; background: var(--panel-2); color: var(--text);
-                }
-                .item .danger { background: #4a1f2d; color: #ffb3c6; }
-                .item .danger:hover { background: #6e2a40; }
-                .empty { text-align: center; color: var(--muted); padding: 3rem 1rem; font-size: 1.05rem;
-                         background: var(--panel); border: 1px dashed var(--line); border-radius: 12px; }
+                .add button:hover { filter: brightness(1.07); }
+                .add button:active { transform: translateY(1px); }
+
+                .meta { display: flex; align-items: center; justify-content: space-between; gap: 1rem;
+                        padding: .9rem 1rem .2rem; }
+                .summary { font-size: .82rem; color: var(--muted); font-weight: 500; }
+                .progress { flex: 1; height: 6px; background: var(--line); border-radius: 999px; overflow: hidden; max-width: 220px; }
+                .progress > span { display: block; height: 100%; background: var(--ok); border-radius: 999px;
+                                   transition: width .3s ease; }
+
+                .filters { display: flex; gap: .3rem; padding: .6rem 1rem 1rem; }
+                .tab { display: inline-flex; align-items: center; gap: .4rem; text-decoration: none;
+                       font-size: .82rem; font-weight: 600; color: var(--muted);
+                       padding: .35rem .7rem; border-radius: 8px; transition: background .15s, color .15s; }
+                .tab:hover { background: var(--bg); color: var(--text); }
+                .tab.active { background: var(--accent-soft); color: var(--accent); }
+                .tab .badge { font-size: .72rem; font-weight: 700; background: rgba(0,0,0,.06);
+                              color: inherit; padding: .05rem .4rem; border-radius: 999px; }
+                .tab.active .badge { background: rgba(79,70,229,.16); }
+
+                ul.list { list-style: none; margin: 0; padding: 0 .5rem .5rem; }
+                .item { display: flex; align-items: center; gap: .75rem; padding: .7rem .6rem;
+                        border-radius: 10px; transition: background .12s; }
+                .item:hover { background: var(--bg); }
+                .item + .item { border-top: 1px solid var(--line); }
+
+                .check { flex: 0 0 auto; width: 22px; height: 22px; border-radius: 50%; cursor: pointer;
+                         border: 2px solid var(--line); background: #fff; color: #fff; display: grid;
+                         place-items: center; padding: 0; transition: background .15s, border-color .15s; }
+                .check svg { opacity: 0; transition: opacity .12s; }
+                .check:hover { border-color: var(--accent); }
+                .item.done .check { background: var(--ok); border-color: var(--ok); }
+                .item.done .check svg { opacity: 1; }
+
+                .edit { flex: 1; min-width: 0; margin: 0; }
+                .title { width: 100%; border: 1px solid transparent; background: transparent; color: var(--text);
+                         font-size: .95rem; padding: .35rem .5rem; border-radius: 8px; outline: none;
+                         transition: border-color .15s, background .15s; }
+                .title:hover { background: #fff; border-color: var(--line); }
+                .title:focus { background: #fff; border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+                .item.done .title { color: var(--muted); text-decoration: line-through; }
+
+                .date { flex: 0 0 auto; font-size: .76rem; color: var(--muted); min-width: 3rem; text-align: right; }
+
+                .del { margin: 0; }
+                .del-btn { flex: 0 0 auto; border: 0; background: transparent; color: var(--muted);
+                           cursor: pointer; padding: .35rem; border-radius: 8px; display: grid; place-items: center;
+                           opacity: 0; transition: opacity .12s, background .12s, color .12s; }
+                .item:hover .del-btn { opacity: 1; }
+                .del-btn:hover { background: #fde8ee; color: var(--danger); }
+
+                .empty { text-align: center; color: var(--muted); padding: 3rem 1rem; font-size: .95rem; }
+
+                .foot { text-align: center; margin-top: 1.25rem; }
+                .src { font-size: .74rem; color: var(--muted); }
               </style>
             </head>
             <body>
-              <header>
-                <h1>✅ To-Do</h1>
-                <span class="count"><!--OPEN--> open</span>
-              </header>
+              <div class="wrap">
+                <div class="head">
+                  <span class="logo">
+                    <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12l5 5L20 6"/></svg>
+                  </span>
+                  <div>
+                    <h1>Tasks</h1>
+                    <p>Stay on top of what matters.</p>
+                  </div>
+                </div>
 
-              <main>
-                <form class="add" action="/add" method="post">
-                  <input type="text" name="title" placeholder="What needs doing?" maxlength="280" required autofocus>
-                  <button type="submit">Add</button>
-                </form>
+                <div class="card">
+                  <form class="add" action="/add" method="post">
+                    <input type="text" name="title" placeholder="Add a new task…" maxlength="280" required autofocus autocomplete="off">
+                    <button type="submit">Add</button>
+                  </form>
 
-                <!--SOURCE-->
+                  <div class="meta">
+                    <span class="summary"><!--SUMMARY--></span>
+                    <span class="progress"><span style="width:<!--PERCENT-->%"></span></span>
+                  </div>
 
-                <ul class="list"><!--ROWS--></ul>
-              </main>
+                  <nav class="filters"><!--FILTERS--></nav>
+
+                  <ul class="list"><!--ROWS--></ul>
+                </div>
+
+                <div class="foot"><!--SOURCE--></div>
+              </div>
             </body>
             </html>
             """;
