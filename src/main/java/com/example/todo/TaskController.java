@@ -71,7 +71,7 @@ public class TaskController {
 
         String source = cacheHit
                 ? "<span class='src cache'>⚡ served from Redis cache</span>"
-                : "<span class='src db'>🗄️ loaded from RDS (cache populated)</span>";
+                : "";
 
         return PAGE.replace("<!--ROWS-->", body)
                    .replace("<!--OPEN-->", String.valueOf(open))
