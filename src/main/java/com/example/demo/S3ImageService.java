@@ -31,6 +31,7 @@ public class S3ImageService {
         }
         String key = "images/" + UUID.randomUUID() + ext;
 
+        
         s3.putObject(
                 PutObjectRequest.builder()
                         .bucket(settings.getImageBucket())
