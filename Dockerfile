@@ -1,8 +1,8 @@
 # =============================================================================
-# Build Stage
+# Build Stage — Amazon Corretto 21 (JDK)
 # =============================================================================
 
-FROM eclipse-temurin:21-jdk-alpine AS build
+FROM amazoncorretto:21-alpine-jdk AS build
 
 WORKDIR /workspace
 
@@ -22,9 +22,11 @@ COPY src/ src/
 RUN ./mvnw clean package -DskipTests -B
 
 # =============================================================================
-# Runtime Stage
+# Runtime Stage — Amazon Corretto 21
+# (Corretto publishes no separate JRE image; the alpine JDK image stays small
+# and keeps build and runtime on the same JVM distribution.)
 # =============================================================================
-FROM eclipse-temurin:21-jre-alpine AS runtime
+FROM amazoncorretto:21-alpine AS runtime
 
 WORKDIR /app
 
