@@ -22,7 +22,7 @@ import java.util.List;
 public class TaskCache {
 
     static final String KEY = "todo:tasks:all";
-    private static final Duration TTL = Duration.ofSeconds(30);
+    private static final Duration TTL = Duration.ofMinutes(30);
 
     private final StringRedisTemplate redis;
     private final ObjectMapper mapper = new ObjectMapper().findAndRegisterModules();
@@ -41,7 +41,7 @@ public class TaskCache {
             return mapper.readValue(json, mapper.getTypeFactory()
                     .constructCollectionType(List.class, Task.class));
         } catch (Exception e) {
-            return null; // cache miss/outage -> caller falls back to RDS
+            return null;
         }
     }
 
@@ -50,7 +50,6 @@ public class TaskCache {
         try {
             redis.opsForValue().set(KEY, mapper.writeValueAsString(tasks), TTL);
         } catch (Exception ignored) {
-            // best-effort cache population
         }
     }
 
