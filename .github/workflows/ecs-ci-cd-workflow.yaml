@@ -2,13 +2,6 @@ name: Build app image and publish deploy bundle
 
 # ---------------------------------------------------------------------------
 # GitHub Actions is the "build factory" (it replaces CodeBuild). On every push
-# to the lab branch it does the two things the CodeDeploy stage needs:
-#   1. builds + pushes the container image to ECR
-#   2. publishes the CodeDeploy files (taskdef.json + appspec.yaml) to S3,
-#      but only when those files actually change (see step 4)
-#
-# The pipeline itself does no building — its ECR source provides the image
-# identity (imageDetail.json, auto-generated) and its S3 source provides the
 # deploy bundle published here.
 # ---------------------------------------------------------------------------
 on:
@@ -60,20 +53,6 @@ jobs:
       - name: Resolve AWS account ID
         run: echo "ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)" >> "$GITHUB_ENV"
 
-      # -----------------------------------------------------------------
-      # 4. Publish the CodeDeploy files as a small zip to the deploy-source
-      #    S3 bucket (the pipeline's "AppSource"), but ONLY when they change.
-      #
-      #    We hash taskdef.json + appspec.yaml and store the hash as object
-      #    metadata. On each run we compare against the hash on the current
-      #    object: re-upload only if it differs (content changed) or the object
-      #    doesn't exist yet (first run). Image-only builds skip the upload, so
-      #    no needless S3 versions are created. Runs BEFORE the image push so
-      #    the bundle is current when the ECR push fires the pipeline.
-      #    <IMAGE1_NAME> / <TASK_DEFINITION> stay as placeholders — CodeDeploy
-      #    fills them at deploy time. (-j flattens the zip so both files sit at
-      #    the artifact root, where CodeDeploy expects them.)
-      # -----------------------------------------------------------------
       - name: Publish deploy bundle to S3 if changed
         run: |
           set -euo pipefail
