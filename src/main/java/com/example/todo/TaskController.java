@@ -312,7 +312,7 @@ public class TaskController {
                       <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12l5 5L20 6"/></svg>
                     </span>
                     <div>
-                      <h1>Tasks</h1>
+                      <h1>Tasks V1</h1>
                       <p>Stay on top of what matters.</p>
                     </div>
                   </div>
